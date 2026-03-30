@@ -120,7 +120,7 @@ export function execOpenClaw(
         if (text) {
           resolve(text);
         } else {
-          resolve(stdout);
+          resolve(data.summary || stdout.trim() || "No response from OpenClaw");
         }
       },
     );
