@@ -15,8 +15,8 @@ function isDemoMode(): boolean {
   return process.env.GMAIL_DRAFTER_DEMO_MODE === "true";
 }
 
-const TIMEOUT_MS = 60_000;
-const SLOW_WARNING_MS = 15_000;
+const TIMEOUT_MS = 300_000;
+const SLOW_WARNING_MS = 30_000;
 
 /**
  * Demo mode canned responses, rotated by a hash of the query string.
