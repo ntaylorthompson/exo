@@ -60,12 +60,21 @@ export function execOpenClaw(
       slowTimer = setTimeout(onSlow, SLOW_WARNING_MS);
     }
 
-    const child = execFile(
+    // Define onAbort early so execFile callback can remove it on completion
+    let child: ReturnType<typeof execFile>;
+    const onAbort = () => {
+      if (slowTimer) clearTimeout(slowTimer);
+      child?.kill("SIGTERM");
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+
+    child = execFile(
       "openclaw",
       ["agent", "--agent", "main", "--message", message, "--json"],
       { timeout: TIMEOUT_MS, env: { ...process.env, NO_COLOR: "1", ...extraEnv } },
       (error, stdout, stderr) => {
         if (slowTimer) clearTimeout(slowTimer);
+        signal.removeEventListener("abort", onAbort);
 
         if (signal.aborted) {
           reject(new Error("Request cancelled"));
@@ -82,7 +91,7 @@ export function execOpenClaw(
             return;
           }
           if (error.killed || combined.includes("ETIMEDOUT")) {
-            reject(new Error("OpenClaw: Request timed out after 60s"));
+            reject(new Error("OpenClaw: Request timed out after 5m"));
             return;
           }
           reject(new Error(`OpenClaw: ${error.message}`));
@@ -111,13 +120,6 @@ export function execOpenClaw(
         }
       },
     );
-
-    // Kill child process on abort
-    const onAbort = () => {
-      if (slowTimer) clearTimeout(slowTimer);
-      child.kill("SIGTERM");
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
   });
 }
 
