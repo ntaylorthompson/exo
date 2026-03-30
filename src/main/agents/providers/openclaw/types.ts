@@ -5,6 +5,8 @@
  * These types model both the provider configuration and the CLI output shape.
  */
 
+import { z } from "zod";
+
 // --- Provider configuration (passed from settings) ---
 
 export interface OpenClawProviderConfig {
@@ -15,30 +17,32 @@ export interface OpenClawProviderConfig {
 
 // --- CLI response shape (`openclaw agent --json`) ---
 
-export interface OpenClawAgentPayload {
-  text: string | null;
-  mediaUrl: string | null;
-}
+const OpenClawAgentPayloadSchema = z.object({
+  text: z.string().nullable(),
+  mediaUrl: z.string().nullable(),
+});
 
-export interface OpenClawAgentResult {
-  payloads?: OpenClawAgentPayload[];
-  meta?: {
-    durationMs: number;
-    agentMeta?: {
-      sessionId: string;
-      provider: string;
-      model: string;
-      usage?: {
-        input: number;
-        output: number;
-      };
-    };
-  };
-}
+const OpenClawAgentResultSchema = z.object({
+  payloads: z.array(OpenClawAgentPayloadSchema).optional(),
+  meta: z.object({
+    durationMs: z.number(),
+    agentMeta: z.object({
+      sessionId: z.string(),
+      provider: z.string(),
+      model: z.string(),
+      usage: z.object({
+        input: z.number(),
+        output: z.number(),
+      }).optional(),
+    }).optional(),
+  }).optional(),
+});
 
-export interface OpenClawAgentResponse {
-  runId: string;
-  status: "ok" | "error" | string;
-  summary: string;
-  result?: OpenClawAgentResult;
-}
+export const OpenClawAgentResponseSchema = z.object({
+  runId: z.string(),
+  status: z.string(),
+  summary: z.string(),
+  result: OpenClawAgentResultSchema.optional(),
+});
+
+export type OpenClawAgentResponse = z.infer<typeof OpenClawAgentResponseSchema>;

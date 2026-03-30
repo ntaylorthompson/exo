@@ -9,7 +9,8 @@ import type {
   AgentEvent,
   SubAgentToolConfig,
 } from "../../types";
-import type { OpenClawProviderConfig, OpenClawAgentResponse } from "./types";
+import type { OpenClawProviderConfig } from "./types";
+import { OpenClawAgentResponseSchema } from "./types";
 
 function isDemoMode(): boolean {
   return process.env.EXO_DEMO_MODE === "true";
@@ -99,24 +100,27 @@ export function execOpenClaw(
         }
 
         // Parse JSON output to extract the response text
-        try {
-          const data = JSON.parse(stdout) as OpenClawAgentResponse;
-          if (data.status !== "ok") {
-            reject(new Error(`OpenClaw: Agent returned status "${data.status}" — ${data.summary ?? "unknown error"}`));
-            return;
-          }
-          const text = data.result?.payloads
-            ?.map((p) => p.text)
-            .filter(Boolean)
-            .join("\n");
-          if (text) {
-            resolve(text);
-          } else {
-            resolve(stdout);
-          }
-        } catch {
-          // If not JSON, return raw stdout (might be plain text response)
+        const parsed = OpenClawAgentResponseSchema.safeParse(
+          (() => { try { return JSON.parse(stdout); } catch { return null; } })(),
+        );
+        if (!parsed.success) {
+          // Not valid JSON or doesn't match schema — return raw stdout
           resolve(stdout.trim() || "No response from OpenClaw");
+          return;
+        }
+        const data = parsed.data;
+        if (data.status !== "ok") {
+          reject(new Error(`OpenClaw: Agent returned status "${data.status}" — ${data.summary ?? "unknown error"}`));
+          return;
+        }
+        const text = data.result?.payloads
+          ?.map((p) => p.text)
+          .filter(Boolean)
+          .join("\n");
+        if (text) {
+          resolve(text);
+        } else {
+          resolve(stdout);
         }
       },
     );
@@ -180,7 +184,7 @@ export class OpenClawAgentProvider implements AgentProvider {
     params.signal.addEventListener("abort", onParentAbort, { once: true });
 
     try {
-      // Race a 15s slow-warning timer against the CLI call so the warning
+      // Race a 30s slow-warning timer against the CLI call so the warning
       // is yielded while the CLI is still running (not after it finishes).
       const slowWarning = Symbol("slow");
       const cliPromise = this.queryOpenClaw(params.prompt, controller.signal);
