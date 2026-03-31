@@ -98,6 +98,14 @@ export function _setClientForTesting(client: unknown): void {
   _anthropicClient = client as Anthropic;
 }
 
+/**
+ * Reset the cached default client, forcing a fresh Anthropic() on next call.
+ * Call this when the API key changes (e.g. via Settings).
+ */
+export function resetClient(): void {
+  _defaultClient = null;
+}
+
 function getClient(): Anthropic {
   if (_anthropicClient) return _anthropicClient;
   if (!_defaultClient) _defaultClient = new Anthropic();
