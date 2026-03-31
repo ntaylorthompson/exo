@@ -60,7 +60,10 @@ export function registerScheduledSendIpc(): void {
       options: SendMessageOptions & { accountId: string; scheduledAt: number },
     ): Promise<IpcResponse<ScheduledMessage>> => {
       if (useFakeData) {
-        log.info({ to: options.to, scheduledAt: new Date(options.scheduledAt).toISOString() }, "[DEMO] Scheduling message");
+        log.info(
+          { to: options.to, scheduledAt: new Date(options.scheduledAt).toISOString() },
+          "[DEMO] Scheduling message",
+        );
         const msg: ScheduledMessage = {
           id: `demo-scheduled-${Date.now()}`,
           accountId: options.accountId,
