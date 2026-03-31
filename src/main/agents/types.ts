@@ -1,5 +1,5 @@
 import { type z } from "zod";
-import type { McpServerConfig } from "../../shared/types";
+import type { McpServerConfig, CliToolConfig } from "../../shared/types";
 
 // Re-export renderer-safe types from the shared module to maintain a single
 // source of truth across the IPC boundary.
@@ -163,6 +163,7 @@ export interface AgentFrameworkConfig {
     chromeProfilePath?: string;
   };
   mcpServers?: Record<string, McpServerConfig>;
+  cliTools?: CliToolConfig[];
 }
 
 export interface ProviderSettings {
