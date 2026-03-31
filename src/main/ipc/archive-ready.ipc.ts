@@ -204,7 +204,7 @@ export function registerArchiveReadyIpc(): void {
             analyzed++;
             if (result.archive_ready) ready++;
           } catch (error) {
-            log.error(`[ArchiveReady] Failed to analyze thread ${threadId}:`, error);
+            log.error({ err: error, threadId }, "[ArchiveReady] Failed to analyze thread");
           }
         }
 
@@ -294,7 +294,7 @@ export function registerArchiveReadyIpc(): void {
             );
             archivedIds.push(email.id);
           } catch (err) {
-            log.error(`[ArchiveReady] Failed to archive email ${email.id}:`, err);
+            log.error({ err, emailId: email.id }, "[ArchiveReady] Failed to archive email");
           }
         }
 
@@ -381,7 +381,7 @@ export function registerArchiveReadyIpc(): void {
               );
               threadArchived = true;
             } catch (err) {
-              log.error(`[ArchiveReady] Failed to archive email ${email.id}:`, err);
+              log.error({ err, emailId: email.id }, "[ArchiveReady] Failed to archive email");
             }
           }
 

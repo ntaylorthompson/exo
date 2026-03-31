@@ -124,11 +124,14 @@ function parseEnrichmentData(
   try {
     return JSON.parse(rawData) as Record<string, unknown>;
   } catch (error) {
-    log.warn(`[EnrichmentStore] Failed to parse enrichment payload`, {
-      extensionId,
-      panelId,
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
+    log.warn(
+      {
+        extensionId,
+        panelId,
+        err: error instanceof Error ? error.message : "Unknown error",
+      },
+      "[EnrichmentStore] Failed to parse enrichment payload",
+    );
     return null;
   }
 }
