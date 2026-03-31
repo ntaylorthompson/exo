@@ -58,12 +58,7 @@ class SnoozeService {
    * Snooze a thread until the specified time.
    * Purely local — hides the thread in-app without touching Gmail labels.
    */
-  snooze(
-    emailId: string,
-    threadId: string,
-    accountId: string,
-    snoozeUntil: number
-  ): SnoozedEmail {
+  snooze(emailId: string, threadId: string, accountId: string, snoozeUntil: number): SnoozedEmail {
     const id = randomUUID();
     // Remove any existing snooze for this thread first
     dbUnsnoozeByThread(threadId, accountId);

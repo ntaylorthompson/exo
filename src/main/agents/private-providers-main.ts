@@ -1,4 +1,4 @@
-import type { AgentFrameworkConfig } from './types';
+import type { AgentFrameworkConfig } from "./types";
 import { createLogger } from "../services/logger";
 
 const log = createLogger("private-providers");
@@ -10,7 +10,10 @@ export type MainSetup = {
   displayName?: string;
 };
 
-const modules = import.meta.glob('../../agents-private/*/main-setup.ts', { eager: true }) as Record<string, MainSetup>;
+const modules = import.meta.glob("../../agents-private/*/main-setup.ts", { eager: true }) as Record<
+  string,
+  MainSetup
+>;
 
 /**
  * Build a map of providerId → auth function from discovered private providers.
@@ -19,7 +22,10 @@ const modules = import.meta.glob('../../agents-private/*/main-setup.ts', { eager
 const authHandlers = new Map<string, () => Promise<boolean>>();
 const authCheckers = new Map<string, () => Promise<boolean>>();
 const providerDisplayNames = new Map<string, string>();
-const installedConfigEnrichers = new Map<string, (config: AgentFrameworkConfig) => Promise<AgentFrameworkConfig>>();
+const installedConfigEnrichers = new Map<
+  string,
+  (config: AgentFrameworkConfig) => Promise<AgentFrameworkConfig>
+>();
 
 for (const [path, mod] of Object.entries(modules)) {
   // Extract directory name: "../../agents-private/my-agent/main-setup.ts" → "my-agent"
@@ -38,7 +44,9 @@ for (const [path, mod] of Object.entries(modules)) {
   }
 }
 
-export async function populatePrivateProviderConfig(config: AgentFrameworkConfig): Promise<AgentFrameworkConfig> {
+export async function populatePrivateProviderConfig(
+  config: AgentFrameworkConfig,
+): Promise<AgentFrameworkConfig> {
   let enriched = config;
   for (const [modulePath, mod] of Object.entries(modules)) {
     if (mod.populateConfig) {
@@ -55,7 +63,10 @@ export async function populatePrivateProviderConfig(config: AgentFrameworkConfig
     try {
       enriched = await enricher(enriched);
     } catch (err) {
-      log.warn({ err: err }, `[PrivateProviders] Config enrichment failed for installed provider ${id}`);
+      log.warn(
+        { err: err },
+        `[PrivateProviders] Config enrichment failed for installed provider ${id}`,
+      );
     }
   }
 
@@ -102,10 +113,7 @@ export async function getProvidersNeedingAuth(): Promise<
  * Register auth/config handlers for an installed (non-bundled) agent provider.
  * Called by ExtensionHost when loading a provider's main-setup.js.
  */
-export function registerProviderAuth(
-  id: string,
-  setup: MainSetup
-): void {
+export function registerProviderAuth(id: string, setup: MainSetup): void {
   if (setup.openAuthWindow) {
     authHandlers.set(id, setup.openAuthWindow);
   }

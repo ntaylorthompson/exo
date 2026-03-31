@@ -1,9 +1,18 @@
 import { ipcMain } from "electron";
 import { createMessage } from "../services/anthropic-service";
-import { DraftGenerator } from "../services/draft-generator";
-import { generateDraftForEmail } from "../services/draft-pipeline";
-import { getEmail, deleteDraft, deleteAgentTrace, clearInboxPendingDraftsAndTraces, getInboxPendingDraftsWithGmail, updateDraftAgentTaskId } from "../db";
-import { saveDraftAndSync, deleteGmailDraftById, deleteGmailDraftsBatch } from "../services/gmail-draft-sync";
+import {
+  getEmail,
+  deleteDraft,
+  deleteAgentTrace,
+  clearInboxPendingDraftsAndTraces,
+  getInboxPendingDraftsWithGmail,
+  updateDraftAgentTaskId,
+} from "../db";
+import {
+  saveDraftAndSync,
+  deleteGmailDraftById,
+  deleteGmailDraftsBatch,
+} from "../services/gmail-draft-sync";
 import { getConfig, getModelIdForFeature } from "./settings.ipc";
 import { buildMemoryContext } from "../services/memory-context";
 import { prefetchService } from "../services/prefetch-service";
@@ -24,7 +33,21 @@ export function registerDraftsIpc(): void {
     "drafts:save",
     async (
       _,
-      { emailId, body, composeMode, to, cc, bcc }: { emailId: string; body: string; composeMode?: string; to?: string[]; cc?: string[]; bcc?: string[] }
+      {
+        emailId,
+        body,
+        composeMode,
+        to,
+        cc,
+        bcc,
+      }: {
+        emailId: string;
+        body: string;
+        composeMode?: string;
+        to?: string[];
+        cc?: string[];
+        bcc?: string[];
+      },
     ): Promise<IpcResponse<void>> => {
       if (useFakeData) {
         log.info(`[DEMO] Saving draft for email ${emailId}`);
@@ -51,7 +74,7 @@ export function registerDraftsIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Refine a draft based on critique
@@ -59,17 +82,21 @@ export function registerDraftsIpc(): void {
     "drafts:refine",
     async (
       _,
-      { emailId, currentDraft, critique }: { emailId: string; currentDraft: string; critique: string }
+      {
+        emailId,
+        currentDraft,
+        critique,
+      }: { emailId: string; currentDraft: string; critique: string },
     ): Promise<IpcResponse<string>> => {
       // In demo mode, return a simple refined version
       if (useFakeData) {
-        const email = DEMO_INBOX_EMAILS.find(e => e.id === emailId);
+        const email = DEMO_INBOX_EMAILS.find((e) => e.id === emailId);
         if (!email) {
           return { success: false, error: "Email not found in demo data" };
         }
 
         // Simulate refinement — return draft unchanged in demo mode
-        await new Promise(resolve => setTimeout(resolve, 800));
+        await new Promise((resolve) => setTimeout(resolve, 800));
         return { success: true, data: currentDraft };
       }
 
@@ -79,7 +106,7 @@ export function registerDraftsIpc(): void {
           return { success: false, error: "Email not found" };
         }
 
-        const config = getConfig();
+        const _config = getConfig();
 
         // Include relevant memories so refinement doesn't contradict saved preferences
         const senderMatch = email.from.match(/<([^>]+)>/) ?? email.from.match(/([^\s<]+@[^\s>]+)/);
@@ -87,17 +114,16 @@ export function registerDraftsIpc(): void {
         const memoryContext = senderEmail
           ? buildMemoryContext(senderEmail, email.accountId || "default")
           : "";
-        const memorySection = memoryContext
-          ? `\n${memoryContext}\n---\n`
-          : "";
+        const memorySection = memoryContext ? `\n${memoryContext}\n---\n` : "";
 
-        const response = await createMessage({
-          model: getModelIdForFeature("refinement"),
-          max_tokens: 1024,
-          messages: [
-            {
-              role: "user",
-              content: `Refine this email draft based on the feedback provided.
+        const response = await createMessage(
+          {
+            model: getModelIdForFeature("refinement"),
+            max_tokens: 1024,
+            messages: [
+              {
+                role: "user",
+                content: `Refine this email draft based on the feedback provided.
 ${memorySection}
 ORIGINAL EMAIL BEING REPLIED TO:
 From: ${email.from}
@@ -117,9 +143,11 @@ ${critique}
 Output ONLY the refined draft text - no explanations, no preamble. Just the improved email body.
 
 FORMATTING: Write plain text paragraphs separated by blank lines. Do NOT use HTML tags of any kind (<p>, <br>, <div>, <b>, <i>, <ul>, <ol>, etc.). For bold, wrap text in double asterisks like **bold text**. For italic, wrap text in single asterisks like *italic text*. For bullet lists, use lines starting with "- ". For numbered lists, use "1. ", "2. ", etc.`,
-            },
-          ],
-        }, { caller: "drafts-refine", emailId, accountId: email.accountId });
+              },
+            ],
+          },
+          { caller: "drafts-refine", emailId, accountId: email.accountId },
+        );
 
         const textBlock = response.content.find((block) => block.type === "text");
         if (!textBlock || textBlock.type !== "text") {
@@ -138,7 +166,7 @@ FORMATTING: Write plain text paragraphs separated by blank lines. Do NOT use HTM
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Rerun agent draft for a single email
@@ -201,17 +229,23 @@ FORMATTING: Write plain text paragraphs separated by blank lines. Do NOT use HTM
         await agentCoordinator.runAgent(taskId, ["claude"], prompt, context);
 
         // Link draft to agent task when it completes (async, don't block response)
-        agentCoordinator.waitForCompletion(taskId).then(() => {
-          try {
-            updateDraftAgentTaskId(emailId, taskId);
-          } catch (err) {
-            log.warn({ err: err }, `[Drafts] Failed to link agent task ${taskId} to draft for ${emailId}`);
-          }
-          prefetchService.markAgentDraftDone(emailId, "completed");
-        }).catch((err) => {
-          log.warn({ err: err }, `[Drafts] Agent task ${taskId} did not complete successfully`);
-          prefetchService.markAgentDraftDone(emailId, "failed");
-        });
+        agentCoordinator
+          .waitForCompletion(taskId)
+          .then(() => {
+            try {
+              updateDraftAgentTaskId(emailId, taskId);
+            } catch (err) {
+              log.warn(
+                { err: err },
+                `[Drafts] Failed to link agent task ${taskId} to draft for ${emailId}`,
+              );
+            }
+            prefetchService.markAgentDraftDone(emailId, "completed");
+          })
+          .catch((err) => {
+            log.warn({ err: err }, `[Drafts] Agent task ${taskId} did not complete successfully`);
+            prefetchService.markAgentDraftDone(emailId, "failed");
+          });
 
         return { success: true, data: { taskId } };
       } catch (error) {
@@ -220,7 +254,7 @@ FORMATTING: Write plain text paragraphs separated by blank lines. Do NOT use HTM
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Rerun all agent drafts (bulk — clears pending drafts and re-triggers pipeline)
@@ -241,7 +275,9 @@ FORMATTING: Write plain text paragraphs separated by blank lines. Do NOT use HTM
 
         const { draftsCleared: clearedCount, tracesCleared } = clearInboxPendingDraftsAndTraces();
 
-        log.info(`[Drafts] Rerun all: cleared ${clearedCount} pending drafts, ${tracesCleared} agent traces`);
+        log.info(
+          `[Drafts] Rerun all: cleared ${clearedCount} pending drafts, ${tracesCleared} agent traces`,
+        );
 
         // Reset prefetch tracking so emails can be re-queued
         prefetchService.clear();
@@ -258,6 +294,6 @@ FORMATTING: Write plain text paragraphs separated by blank lines. Do NOT use HTM
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 }

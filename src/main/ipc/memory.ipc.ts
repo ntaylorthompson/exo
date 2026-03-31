@@ -13,7 +13,13 @@ import {
   getDraftMemory,
   deleteDraftMemory,
 } from "../db";
-import type { IpcResponse, Memory, DraftMemory, MemoryScope, MemorySource, MemoryType } from "../../shared/types";
+import type {
+  IpcResponse,
+  Memory,
+  DraftMemory,
+  MemoryScope,
+  MemorySource,
+} from "../../shared/types";
 import { consolidateMemoryScopes } from "../services/draft-edit-learner";
 import { createLogger } from "../services/logger";
 
@@ -33,37 +39,53 @@ export function registerMemoryIpc(): void {
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
-    }
+    },
   );
 
   // Get memories relevant to a specific email's sender
   ipcMain.handle(
     "memory:get-for-email",
-    async (_, { senderEmail, accountId }: { senderEmail: string; accountId: string }): Promise<IpcResponse<Memory[]>> => {
+    async (
+      _,
+      { senderEmail, accountId }: { senderEmail: string; accountId: string },
+    ): Promise<IpcResponse<Memory[]>> => {
       try {
         // Return both drafting and analysis memories for this sender
         const sender = senderEmail.toLowerCase();
         const drafting = getRelevantMemories(sender, accountId, "drafting");
         const analysis = getRelevantMemories(sender, accountId, "analysis");
-        const deduped = [...drafting, ...analysis.filter(a => !drafting.some(d => d.id === a.id))];
+        const deduped = [
+          ...drafting,
+          ...analysis.filter((a) => !drafting.some((d) => d.id === a.id)),
+        ];
         return { success: true, data: deduped };
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
-    }
+    },
   );
 
   // Save a new memory
   ipcMain.handle(
     "memory:save",
-    async (_, { accountId, scope, scopeValue, content, source, sourceEmailId }: {
-      accountId: string;
-      scope: MemoryScope;
-      scopeValue?: string | null;
-      content: string;
-      source?: MemorySource;
-      sourceEmailId?: string;
-    }): Promise<IpcResponse<Memory>> => {
+    async (
+      _,
+      {
+        accountId,
+        scope,
+        scopeValue,
+        content,
+        source,
+        sourceEmailId,
+      }: {
+        accountId: string;
+        scope: MemoryScope;
+        scopeValue?: string | null;
+        content: string;
+        source?: MemorySource;
+        sourceEmailId?: string;
+      },
+    ): Promise<IpcResponse<Memory>> => {
       try {
         const now = Date.now();
         const memory: Memory = {
@@ -84,16 +106,27 @@ export function registerMemoryIpc(): void {
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
-    }
+    },
   );
 
   // Update an existing memory
   ipcMain.handle(
     "memory:update",
-    async (_, { id, updates }: {
-      id: string;
-      updates: { content?: string; enabled?: boolean; scope?: MemoryScope; scopeValue?: string | null };
-    }): Promise<IpcResponse<Memory | null>> => {
+    async (
+      _,
+      {
+        id,
+        updates,
+      }: {
+        id: string;
+        updates: {
+          content?: string;
+          enabled?: boolean;
+          scope?: MemoryScope;
+          scopeValue?: string | null;
+        };
+      },
+    ): Promise<IpcResponse<Memory | null>> => {
       try {
         if (updates.scopeValue !== undefined && updates.scopeValue !== null) {
           updates.scopeValue = updates.scopeValue.toLowerCase();
@@ -104,21 +137,18 @@ export function registerMemoryIpc(): void {
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
-    }
+    },
   );
 
   // Delete a memory
-  ipcMain.handle(
-    "memory:delete",
-    async (_, { id }: { id: string }): Promise<IpcResponse<void>> => {
-      try {
-        deleteMemory(id);
-        return { success: true, data: undefined };
-      } catch (error) {
-        return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
-      }
+  ipcMain.handle("memory:delete", async (_, { id }: { id: string }): Promise<IpcResponse<void>> => {
+    try {
+      deleteMemory(id);
+      return { success: true, data: undefined };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
     }
-  );
+  });
 
   // Get all category names for autocomplete
   ipcMain.handle(
@@ -130,17 +160,24 @@ export function registerMemoryIpc(): void {
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
-    }
+    },
   );
 
   // AI-assisted scope classification for memories
   ipcMain.handle(
     "memory:classify",
-    async (_, { content, senderEmail, senderDomain }: {
-      content: string;
-      senderEmail: string;
-      senderDomain: string;
-    }): Promise<IpcResponse<{ scope: MemoryScope; scopeValue: string | null; content: string }>> => {
+    async (
+      _,
+      {
+        content,
+        senderEmail,
+        senderDomain,
+      }: {
+        content: string;
+        senderEmail: string;
+        senderDomain: string;
+      },
+    ): Promise<IpcResponse<{ scope: MemoryScope; scopeValue: string | null; content: string }>> => {
       // In demo/test mode, skip API call and default to person scope
       if (process.env.EXO_TEST_MODE === "true" || process.env.EXO_DEMO_MODE === "true") {
         return {
@@ -149,12 +186,14 @@ export function registerMemoryIpc(): void {
         };
       }
       try {
-        const response = await createMessage({
-          model: "claude-haiku-4-5-20251001", // simple JSON classification — always haiku, independent of user model config
-          max_tokens: 256,
-          messages: [{
-            role: "user",
-            content: `Classify this email preference/feedback into a scope for future application.
+        const response = await createMessage(
+          {
+            model: "claude-haiku-4-5-20251001", // simple JSON classification — always haiku, independent of user model config
+            max_tokens: 256,
+            messages: [
+              {
+                role: "user",
+                content: `Classify this email preference/feedback into a scope for future application.
 
 Feedback: "${content}"
 Sender email: ${senderEmail}
@@ -166,8 +205,11 @@ Determine:
 3. content: rephrase the feedback as a clear, reusable instruction (e.g. "Use formal tone" instead of "make it more formal")
 
 Respond in JSON only: {"scope":"...","scopeValue":"...","content":"..."}`,
-          }],
-        }, { caller: "memory-classify" });
+              },
+            ],
+          },
+          { caller: "memory-classify" },
+        );
 
         const text = response.content[0]?.type === "text" ? response.content[0].text : "";
         // Extract JSON object — find the first { and match to its closing }
@@ -183,30 +225,49 @@ Respond in JSON only: {"scope":"...","scopeValue":"...","content":"..."}`,
         let escaped = false;
         for (let i = jsonStart; i < text.length; i++) {
           const ch = text[i];
-          if (escaped) { escaped = false; continue; }
-          if (ch === "\\") { escaped = true; continue; }
-          if (ch === '"') { inString = !inString; continue; }
+          if (escaped) {
+            escaped = false;
+            continue;
+          }
+          if (ch === "\\") {
+            escaped = true;
+            continue;
+          }
+          if (ch === '"') {
+            inString = !inString;
+            continue;
+          }
           if (inString) continue;
           if (ch === "{") depth++;
           else if (ch === "}") {
             depth--;
-            if (depth === 0) { jsonEnd = i; break; }
+            if (depth === 0) {
+              jsonEnd = i;
+              break;
+            }
           }
         }
         if (jsonEnd === -1) {
           return { success: true, data: { scope: "person", scopeValue: senderEmail, content } };
         }
 
-        const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1)) as { scope: string; scopeValue: string | null; content: string };
+        const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1)) as {
+          scope: string;
+          scopeValue: string | null;
+          content: string;
+        };
         const validScopes: MemoryScope[] = ["person", "domain", "category", "global"];
-        const scope = validScopes.includes(parsed.scope as MemoryScope) ? (parsed.scope as MemoryScope) : "person";
-        const scopeValue = scope === "global"
-          ? null
-          : scope === "domain"
-            ? (parsed.scopeValue ?? senderDomain)
-            : scope === "category"
-              ? (parsed.scopeValue ?? null)
-              : (parsed.scopeValue ?? senderEmail);
+        const scope = validScopes.includes(parsed.scope as MemoryScope)
+          ? (parsed.scope as MemoryScope)
+          : "person";
+        const scopeValue =
+          scope === "global"
+            ? null
+            : scope === "domain"
+              ? (parsed.scopeValue ?? senderDomain)
+              : scope === "category"
+                ? (parsed.scopeValue ?? null)
+                : (parsed.scopeValue ?? senderEmail);
 
         return {
           success: true,
@@ -216,14 +277,14 @@ Respond in JSON only: {"scope":"...","scopeValue":"...","content":"..."}`,
             content: parsed.content || content,
           },
         };
-      } catch (error) {
+      } catch (_error) {
         // Fallback: return original with person scope
         return {
           success: true,
           data: { scope: "person", scopeValue: senderEmail, content },
         };
       }
-    }
+    },
   );
 
   // ============================================
@@ -240,13 +301,16 @@ Respond in JSON only: {"scope":"...","scopeValue":"...","content":"..."}`,
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
-    }
+    },
   );
 
   // Manually promote a draft memory to a real memory
   ipcMain.handle(
     "draft-memory:promote",
-    async (_, { id, accountId }: { id: string; accountId: string }): Promise<IpcResponse<Memory>> => {
+    async (
+      _,
+      { id, accountId }: { id: string; accountId: string },
+    ): Promise<IpcResponse<Memory>> => {
       try {
         const dm = getDraftMemory(id);
         if (!dm) {
@@ -258,21 +322,31 @@ Respond in JSON only: {"scope":"...","scopeValue":"...","content":"..."}`,
 
         const memoryType = dm.memoryType ?? "drafting";
         const source = memoryType === "analysis" ? "priority-override" : "draft-edit";
-        const existingMemories = getMemories(accountId, memoryType).filter(m => m.enabled);
+        const existingMemories = getMemories(accountId, memoryType).filter((m) => m.enabled);
         const result = await consolidateMemoryScopes(
-          { content: dm.content, scope: dm.scope, scopeValue: dm.scope === "global" ? null : dm.scopeValue },
-          existingMemories, accountId,
+          {
+            content: dm.content,
+            scope: dm.scope,
+            scopeValue: dm.scope === "global" ? null : dm.scopeValue,
+          },
+          existingMemories,
+          accountId,
           { source, memoryType },
         );
 
         if (result.action === "duplicate") {
           const covering = result.coveringMemoryId
-            ? existingMemories.find(m => m.id === result.coveringMemoryId)
+            ? existingMemories.find((m) => m.id === result.coveringMemoryId)
             : undefined;
           if (!covering) {
-            return { success: false, error: "Draft memory is a duplicate but covering memory could not be identified" };
+            return {
+              success: false,
+              error: "Draft memory is a duplicate but covering memory could not be identified",
+            };
           }
-          log.info(`[MemoryIPC] Draft memory "${dm.content}" is already covered by a promoted memory — deleting`);
+          log.info(
+            `[MemoryIPC] Draft memory "${dm.content}" is already covered by a promoted memory — deleting`,
+          );
           deleteDraftMemory(id);
           return { success: true, data: covering };
         }
@@ -302,15 +376,15 @@ Respond in JSON only: {"scope":"...","scopeValue":"...","content":"..."}`,
         if (result.action === "consolidate") {
           // Global already existed and covers this preference — return it
           const coveringGlobal = result.coveringMemoryId
-            ? existingMemories.find(m => m.id === result.coveringMemoryId)
-            : existingMemories.find(m => m.scope === "global");
+            ? existingMemories.find((m) => m.id === result.coveringMemoryId)
+            : existingMemories.find((m) => m.scope === "global");
           return { success: true, data: coveringGlobal ?? memory };
         }
         return { success: true, data: memory };
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
-    }
+    },
   );
 
   // Delete a draft memory
@@ -323,6 +397,6 @@ Respond in JSON only: {"scope":"...","scopeValue":"...","content":"..."}`,
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
-    }
+    },
   );
 }

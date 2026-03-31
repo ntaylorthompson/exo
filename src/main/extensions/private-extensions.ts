@@ -17,13 +17,13 @@ const log = createLogger("private-extensions");
 // This will be an empty object if extensions-private doesn't exist
 const privateExtensionModules = import.meta.glob<ExtensionModule>(
   "../../extensions-private/*/src/index.ts",
-  { eager: true }
+  { eager: true },
 );
 
 // Glob the package.json files to get full manifest data
 const privateExtensionPackages = import.meta.glob<{ mailExtension?: Record<string, unknown> }>(
   "../../extensions-private/*/package.json",
-  { eager: true }
+  { eager: true },
 );
 
 /**
@@ -38,9 +38,7 @@ function getPackageJson(modulePath: string): { mailExtension?: Record<string, un
  * Register all private extension modules with the extension host.
  * Uses build-time discovery via import.meta.glob — no filesystem access needed.
  */
-export async function registerPrivateExtensions(
-  extensionHost: ExtensionHost
-): Promise<void> {
+export async function registerPrivateExtensions(extensionHost: ExtensionHost): Promise<void> {
   const modulePaths = Object.keys(privateExtensionModules);
 
   if (modulePaths.length === 0) {

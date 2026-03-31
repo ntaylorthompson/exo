@@ -45,6 +45,7 @@ function scanExtensionDirectory(dirPath: string): string[] {
   }
 
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { readdirSync, statSync } = require("fs");
     const entries = readdirSync(dirPath);
 

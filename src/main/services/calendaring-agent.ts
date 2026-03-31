@@ -1,15 +1,15 @@
 import { createMessage } from "./anthropic-service";
 import { stripJsonFences } from "../../shared/strip-json-fences";
 import {
-import { createLogger } from "./logger";
-
-const log = createLogger("calendaring");
   DEFAULT_CALENDARING_PROMPT,
   DEFAULT_EA_DEFERRAL_TEMPLATE,
   type CalendaringResult,
   type EAConfig,
   type Email,
 } from "../../shared/types";
+import { createLogger } from "./logger";
+
+const log = createLogger("calendaring");
 
 export class CalendaringAgent {
   private model: string;
@@ -21,13 +21,14 @@ export class CalendaringAgent {
   }
 
   async analyze(email: Email): Promise<CalendaringResult> {
-    const response = await createMessage({
-      model: this.model,
-      max_tokens: 512,
-      messages: [
-        {
-          role: "user",
-          content: `${this.prompt}
+    const response = await createMessage(
+      {
+        model: this.model,
+        max_tokens: 512,
+        messages: [
+          {
+            role: "user",
+            content: `${this.prompt}
 
 ---
 EMAIL TO ANALYZE:
@@ -38,9 +39,11 @@ Subject: ${email.subject}
 Date: ${email.date}
 
 ${email.body}`,
-        },
-      ],
-    }, { caller: "calendaring-agent", emailId: email.id });
+          },
+        ],
+      },
+      { caller: "calendaring-agent", emailId: email.id },
+    );
 
     const textBlock = response.content.find((block) => block.type === "text");
     if (!textBlock || textBlock.type !== "text") {

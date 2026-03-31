@@ -68,7 +68,12 @@ class PendingActionsQueue extends EventEmitter {
           item.retryCount++;
           if (item.retryCount >= MAX_RETRIES) {
             log.error(`Permanently failed ${item.type} for ${item.emailId}: account not connected`);
-            this.emit("action-failed", { emailId: item.emailId, accountId: item.accountId, action: item.type, error: "Account not connected" });
+            this.emit("action-failed", {
+              emailId: item.emailId,
+              accountId: item.accountId,
+              action: item.type,
+              error: "Account not connected",
+            });
           } else {
             this.queue.push(item);
           }
@@ -82,7 +87,11 @@ class PendingActionsQueue extends EventEmitter {
         }
 
         log.info(`Successfully processed ${item.type} for ${item.emailId}`);
-        this.emit("action-succeeded", { emailId: item.emailId, accountId: item.accountId, action: item.type });
+        this.emit("action-succeeded", {
+          emailId: item.emailId,
+          accountId: item.accountId,
+          action: item.type,
+        });
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         const isNetwork = isNetworkError(error);
@@ -98,10 +107,17 @@ class PendingActionsQueue extends EventEmitter {
         item.retryCount++;
         if (item.retryCount >= MAX_RETRIES) {
           log.error(`Permanently failed ${item.type} for ${item.emailId}: ${msg}`);
-          this.emit("action-failed", { emailId: item.emailId, accountId: item.accountId, action: item.type, error: msg });
+          this.emit("action-failed", {
+            emailId: item.emailId,
+            accountId: item.accountId,
+            action: item.type,
+            error: msg,
+          });
         } else {
           this.queue.push(item);
-          log.warn(`${item.type} for ${item.emailId} failed (retry ${item.retryCount}/${MAX_RETRIES}): ${msg}`);
+          log.warn(
+            `${item.type} for ${item.emailId} failed (retry ${item.retryCount}/${MAX_RETRIES}): ${msg}`,
+          );
         }
       }
     }
@@ -114,11 +130,11 @@ class PendingActionsQueue extends EventEmitter {
   }
 
   // Type-safe event methods
-  on(event: PendingActionsEvent, listener: (...args: any[]) => void): this {
+  on(event: PendingActionsEvent, listener: (...args: unknown[]) => void): this {
     return super.on(event, listener);
   }
 
-  emit(event: PendingActionsEvent, ...args: any[]): boolean {
+  emit(event: PendingActionsEvent, ...args: unknown[]): boolean {
     return super.emit(event, ...args);
   }
 }

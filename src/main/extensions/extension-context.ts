@@ -4,11 +4,7 @@ import type {
   ExtensionSecrets,
   ExtensionLogger,
 } from "../../shared/extension-types";
-import {
-  getExtensionStorage,
-  setExtensionStorage,
-  deleteExtensionStorage,
-} from "../db";
+import { getExtensionStorage, setExtensionStorage, deleteExtensionStorage } from "../db";
 import { createLogger as createPinoLogger } from "../services/logger";
 
 /**
@@ -95,7 +91,7 @@ function createExtLogger(extensionId: string): ExtensionLogger {
  */
 export function createExtensionContext(
   extensionId: string,
-  extensionPath: string
+  extensionPath: string,
 ): ExtensionContext {
   return {
     extensionId,

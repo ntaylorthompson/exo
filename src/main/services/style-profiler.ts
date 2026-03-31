@@ -18,13 +18,13 @@ const log = createLogger("style-profiler");
 // ============================================
 
 type EmailSignals = {
-  greeting: string;   // "hey" | "hi" | "hello" | "dear" | "none"
-  signoff: string;    // "thanks" | "best" | "cheers" | "regards" | "none"
+  greeting: string; // "hey" | "hi" | "hello" | "dear" | "none"
+  signoff: string; // "thanks" | "best" | "cheers" | "regards" | "none"
   wordCount: number;
 };
 
 function detectGreeting(text: string): string {
-  const firstLine = text.split("\n").find(l => l.trim().length > 0) ?? "";
+  const firstLine = text.split("\n").find((l) => l.trim().length > 0) ?? "";
   const lower = firstLine.toLowerCase().trim();
 
   if (/^dear\b/.test(lower)) return "dear";
@@ -48,7 +48,7 @@ function detectSignoff(text: string): string {
 }
 
 function countWords(text: string): number {
-  return text.split(/\s+/).filter(w => w.length > 0).length;
+  return text.split(/\s+/).filter((w) => w.length > 0).length;
 }
 
 export function extractEmailSignals(bodyText: string): EmailSignals {
@@ -97,19 +97,19 @@ function mostCommon(values: string[]): string {
 
 export function computeCorrespondentProfile(
   recipientEmail: string,
-  accountId: string
+  accountId: string,
 ): CorrespondentProfile | null {
   const sentEmails = getSentEmailsToRecipient(recipientEmail, accountId, 50);
   if (sentEmails.length === 0) return null;
 
-  const signals = sentEmails.map(e => {
+  const signals = sentEmails.map((e) => {
     const text = e.body_text ?? stripHtmlForSearch(e.body);
     return extractEmailSignals(text);
   });
 
-  const greetings = signals.map(s => s.greeting);
-  const signoffs = signals.map(s => s.signoff);
-  const wordCounts = signals.map(s => s.wordCount);
+  const greetings = signals.map((s) => s.greeting);
+  const signoffs = signals.map((s) => s.signoff);
+  const wordCounts = signals.map((s) => s.wordCount);
   const avgWordCount = wordCounts.reduce((a, b) => a + b, 0) / wordCounts.length;
 
   const dominantGreeting = mostCommon(greetings);
@@ -126,9 +126,13 @@ export function computeCorrespondentProfile(
   // 10+ emails = very familiar (0.0), 1 email = formal (1.0)
   const frequencyFactor = Math.max(0, 1.0 - sentEmails.length / 10);
 
-  const formalityScore = Math.max(0, Math.min(1,
-    greetingScore * 0.3 + signoffScore * 0.3 + lengthFactor * 0.2 + frequencyFactor * 0.2
-  ));
+  const formalityScore = Math.max(
+    0,
+    Math.min(
+      1,
+      greetingScore * 0.3 + signoffScore * 0.3 + lengthFactor * 0.2 + frequencyFactor * 0.2,
+    ),
+  );
 
   const profile: CorrespondentProfile = {
     email: recipientEmail,
@@ -192,9 +196,7 @@ async function fetchAndCacheSentEmails(
   const { results: searchResults } = await gmailClient.searchEmails(query, limit);
   if (searchResults.length === 0) return [];
 
-  const fetched = await Promise.allSettled(
-    searchResults.map(r => gmailClient.readEmail(r.id)),
-  );
+  const fetched = await Promise.allSettled(searchResults.map((r) => gmailClient.readEmail(r.id)));
 
   const rows: SentEmailRow[] = [];
   for (const result of fetched) {
@@ -316,8 +318,9 @@ export async function buildStyleContext(
   let profile = getCorrespondentProfile(recipientEmail, accountId);
 
   const STALE_DAYS = 7;
-  const isStale = profile && (Date.now() - profile.lastComputedAt > STALE_DAYS * 24 * 60 * 60 * 1000);
-  const countChanged = profile && getSentEmailCountToRecipient(recipientEmail, accountId) !== profile.emailCount;
+  const isStale = profile && Date.now() - profile.lastComputedAt > STALE_DAYS * 24 * 60 * 60 * 1000;
+  const countChanged =
+    profile && getSentEmailCountToRecipient(recipientEmail, accountId) !== profile.emailCount;
 
   if (!profile || isStale || countChanged) {
     profile = computeCorrespondentProfile(recipientEmail, accountId);

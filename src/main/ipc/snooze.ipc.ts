@@ -32,7 +32,7 @@ export function registerSnoozeIpc(): void {
         threadId: string;
         accountId: string;
         snoozeUntil: number;
-      }
+      },
     ): Promise<IpcResponse<SnoozedEmail>> => {
       try {
         const result = snoozeService.snooze(emailId, threadId, accountId, snoozeUntil);
@@ -50,7 +50,7 @@ export function registerSnoozeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to snooze email",
         };
       }
-    }
+    },
   );
 
   // Manually unsnooze a thread
@@ -58,7 +58,7 @@ export function registerSnoozeIpc(): void {
     "snooze:unsnooze",
     async (
       _event,
-      { threadId, accountId }: { threadId: string; accountId: string }
+      { threadId, accountId }: { threadId: string; accountId: string },
     ): Promise<IpcResponse<void>> => {
       try {
         // Get snooze info before removing so we can include snoozeUntil in the event
@@ -82,7 +82,7 @@ export function registerSnoozeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to unsnooze email",
         };
       }
-    }
+    },
   );
 
   // List snoozed emails for an account.
@@ -92,7 +92,7 @@ export function registerSnoozeIpc(): void {
     "snooze:list",
     async (
       _event,
-      { accountId }: { accountId: string }
+      { accountId }: { accountId: string },
     ): Promise<IpcResponse<SnoozedEmail[]> & { expired?: SnoozedEmail[] }> => {
       try {
         // Process expired snoozes for this account so the renderer can
@@ -106,7 +106,9 @@ export function registerSnoozeIpc(): void {
           }
         }
         if (expired.length > 0) {
-          log.info(`[Snooze IPC] Processed ${expired.length} expired snooze(s) for account ${accountId}`);
+          log.info(
+            `[Snooze IPC] Processed ${expired.length} expired snooze(s) for account ${accountId}`,
+          );
         }
 
         const snoozed = snoozeService.getSnoozedEmails(accountId);
@@ -118,7 +120,7 @@ export function registerSnoozeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to list snoozed emails",
         };
       }
-    }
+    },
   );
 
   // Get snooze info for a specific thread
@@ -126,7 +128,7 @@ export function registerSnoozeIpc(): void {
     "snooze:get",
     async (
       _event,
-      { threadId, accountId }: { threadId: string; accountId: string }
+      { threadId, accountId }: { threadId: string; accountId: string },
     ): Promise<IpcResponse<SnoozedEmail | null>> => {
       try {
         const snoozed = snoozeService.getSnoozedByThread(threadId, accountId);
@@ -138,6 +140,6 @@ export function registerSnoozeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to get snooze info",
         };
       }
-    }
+    },
   );
 }

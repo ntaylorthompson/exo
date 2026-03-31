@@ -16,7 +16,7 @@ const log = createLogger("enrichment-store");
 export function saveEnrichment(
   emailId: string,
   enrichment: EnrichmentData,
-  senderEmail?: string
+  senderEmail?: string,
 ): void {
   saveExtensionEnrichment(
     emailId,
@@ -24,7 +24,7 @@ export function saveEnrichment(
     enrichment.panelId,
     JSON.stringify(enrichment.data),
     enrichment.expiresAt ?? null,
-    senderEmail
+    senderEmail,
   );
 }
 
@@ -54,7 +54,9 @@ export function getEnrichments(emailId: string): ExtensionEnrichmentResult[] {
 
   const totalTime = performance.now() - t0;
   if (totalTime > 5) {
-    log.info(`[PERF] getEnrichments ${emailId.slice(0,8)} DB=${dbTime.toFixed(1)}ms total=${totalTime.toFixed(1)}ms records=${records.length}`);
+    log.info(
+      `[PERF] getEnrichments ${emailId.slice(0, 8)} DB=${dbTime.toFixed(1)}ms total=${totalTime.toFixed(1)}ms records=${records.length}`,
+    );
   }
   return result;
 }
@@ -64,7 +66,7 @@ export function getEnrichments(emailId: string): ExtensionEnrichmentResult[] {
  */
 export function getEnrichmentForPanel(
   emailId: string,
-  panelId: string
+  panelId: string,
 ): ExtensionEnrichmentResult | null {
   const enrichments = getEnrichments(emailId);
   return enrichments.find((e) => e.panelId === panelId) ?? null;
@@ -90,7 +92,7 @@ export function hasValidEnrichment(emailId: string, extensionId: string): boolea
  */
 export function getEnrichmentBySender(
   senderEmail: string,
-  extensionId: string
+  extensionId: string,
 ): ExtensionEnrichmentResult | null {
   const record = getExtensionEnrichmentBySender(senderEmail, extensionId);
   if (!record) return null;
@@ -117,15 +119,16 @@ export function deleteEnrichmentBySender(senderEmail: string, extensionId: strin
 function parseEnrichmentData(
   rawData: string,
   panelId: string,
-  extensionId: string
+  extensionId: string,
 ): Record<string, unknown> | null {
   try {
     return JSON.parse(rawData) as Record<string, unknown>;
   } catch (error) {
-    log.warn(
-      `[EnrichmentStore] Failed to parse enrichment payload`,
-      { extensionId, panelId, error: error instanceof Error ? error.message : "Unknown error" }
-    );
+    log.warn(`[EnrichmentStore] Failed to parse enrichment payload`, {
+      extensionId,
+      panelId,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
     return null;
   }
 }

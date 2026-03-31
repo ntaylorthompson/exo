@@ -27,7 +27,9 @@ class NetworkMonitor extends EventEmitter {
       setTimeout(() => {
         const wasOnline = this._isOnline;
         this._isOnline = net.isOnline();
-        log.info(`[NetworkMonitor] Wake from sleep, network: ${this._isOnline ? "online" : "offline"}`);
+        log.info(
+          `[NetworkMonitor] Wake from sleep, network: ${this._isOnline ? "online" : "offline"}`,
+        );
 
         if (!wasOnline && this._isOnline) {
           this.emit("online");

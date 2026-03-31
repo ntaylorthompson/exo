@@ -26,7 +26,10 @@ let analyzer: ArchiveReadyAnalyzer | null = null;
 function getAnalyzer(): ArchiveReadyAnalyzer {
   if (!analyzer) {
     const config = getConfig();
-    analyzer = new ArchiveReadyAnalyzer(getModelIdForFeature("archiveReady"), config.archiveReadyPrompt);
+    analyzer = new ArchiveReadyAnalyzer(
+      getModelIdForFeature("archiveReady"),
+      config.archiveReadyPrompt,
+    );
   }
   return analyzer;
 }
@@ -41,9 +44,7 @@ function getMainWindow(): BrowserWindow | null {
 }
 
 // Group emails into threads for analysis
-function groupInboxEmailsByThread(
-  accountId: string
-): Map<string, DashboardEmail[]> {
+function groupInboxEmailsByThread(accountId: string): Map<string, DashboardEmail[]> {
   const emails = getInboxEmails(accountId);
   const threadMap = new Map<string, DashboardEmail[]>();
 
@@ -70,10 +71,7 @@ export function registerArchiveReadyIpc(): void {
   // Get all threads that are ready for archiving
   ipcMain.handle(
     "archive-ready:get-threads",
-    async (
-      _,
-      { accountId }: { accountId: string }
-    ): Promise<IpcResponse<ArchiveReadyThread[]>> => {
+    async (_, { accountId }: { accountId: string }): Promise<IpcResponse<ArchiveReadyThread[]>> => {
       try {
         const readyRows = getArchiveReadyThreads(accountId);
 
@@ -83,10 +81,7 @@ export function registerArchiveReadyIpc(): void {
           if (threadEmails.length === 0) continue;
 
           // Sort by date, latest last
-          threadEmails.sort(
-            (a, b) =>
-              new Date(a.date).getTime() - new Date(b.date).getTime()
-          );
+          threadEmails.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
           const latest = threadEmails[threadEmails.length - 1];
 
           result.push({
@@ -101,11 +96,7 @@ export function registerArchiveReadyIpc(): void {
         }
 
         // Sort by latest date descending
-        result.sort(
-          (a, b) =>
-            new Date(b.latestDate).getTime() -
-            new Date(a.latestDate).getTime()
-        );
+        result.sort((a, b) => new Date(b.latestDate).getTime() - new Date(a.latestDate).getTime());
 
         return { success: true, data: result };
       } catch (error) {
@@ -114,7 +105,7 @@ export function registerArchiveReadyIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Analyze a single thread for archive-readiness
@@ -122,7 +113,7 @@ export function registerArchiveReadyIpc(): void {
     "archive-ready:analyze-thread",
     async (
       _,
-      { threadId, accountId }: { threadId: string; accountId: string }
+      { threadId, accountId }: { threadId: string; accountId: string },
     ): Promise<IpcResponse<{ isReady: boolean; reason: string }>> => {
       if (useFakeData) {
         return {
@@ -146,17 +137,9 @@ export function registerArchiveReadyIpc(): void {
         const userEmail = account?.email;
 
         const analyzerInstance = getAnalyzer();
-        const result = await analyzerInstance.analyzeThread(
-          threadEmails,
-          userEmail
-        );
+        const result = await analyzerInstance.analyzeThread(threadEmails, userEmail);
 
-        saveArchiveReady(
-          threadId,
-          accountId,
-          result.archive_ready,
-          result.reason
-        );
+        saveArchiveReady(threadId, accountId, result.archive_ready, result.reason);
 
         return {
           success: true,
@@ -168,7 +151,7 @@ export function registerArchiveReadyIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Scan all inbox threads for archive-readiness
@@ -176,7 +159,7 @@ export function registerArchiveReadyIpc(): void {
     "archive-ready:scan",
     async (
       _,
-      { accountId }: { accountId: string }
+      { accountId }: { accountId: string },
     ): Promise<IpcResponse<{ analyzed: number; ready: number }>> => {
       if (useFakeData) {
         return { success: true, data: { analyzed: 0, ready: 0 } };
@@ -187,9 +170,7 @@ export function registerArchiveReadyIpc(): void {
         const alreadyAnalyzed = getAnalyzedArchiveThreadIds(accountId);
 
         // Compute threads that actually need analysis (only those in the current inbox)
-        const threadsToAnalyze = [...threadMap.keys()].filter(
-          (tid) => !alreadyAnalyzed.has(tid)
-        );
+        const threadsToAnalyze = [...threadMap.keys()].filter((tid) => !alreadyAnalyzed.has(tid));
         const total = threadsToAnalyze.length;
 
         // Get user email for context
@@ -216,25 +197,14 @@ export function registerArchiveReadyIpc(): void {
               });
             }
 
-            const result = await analyzerInstance.analyzeThread(
-              emails,
-              userEmail
-            );
+            const result = await analyzerInstance.analyzeThread(emails, userEmail);
 
-            saveArchiveReady(
-              threadId,
-              accountId,
-              result.archive_ready,
-              result.reason
-            );
+            saveArchiveReady(threadId, accountId, result.archive_ready, result.reason);
 
             analyzed++;
             if (result.archive_ready) ready++;
           } catch (error) {
-            log.error(
-              `[ArchiveReady] Failed to analyze thread ${threadId}:`,
-              error
-            );
+            log.error(`[ArchiveReady] Failed to analyze thread ${threadId}:`, error);
           }
         }
 
@@ -255,7 +225,7 @@ export function registerArchiveReadyIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Dismiss a thread from archive-ready list (keep in inbox)
@@ -263,7 +233,7 @@ export function registerArchiveReadyIpc(): void {
     "archive-ready:dismiss",
     async (
       _,
-      { threadId, accountId }: { threadId: string; accountId: string }
+      { threadId, accountId }: { threadId: string; accountId: string },
     ): Promise<IpcResponse<void>> => {
       try {
         dismissArchiveReady(threadId, accountId);
@@ -274,7 +244,7 @@ export function registerArchiveReadyIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Archive a single thread (all emails in it)
@@ -282,14 +252,17 @@ export function registerArchiveReadyIpc(): void {
     "archive-ready:archive-thread",
     async (
       _,
-      { threadId, accountId }: { threadId: string; accountId: string }
+      { threadId, accountId }: { threadId: string; accountId: string },
     ): Promise<IpcResponse<void>> => {
       if (useFakeData) {
         const threadEmails = getEmailsByThread(threadId, accountId);
         // Remove all emails in the thread (including SENT) so no ghost threads remain
         const removedIds = threadEmails.map((e) => e.id);
         for (const email of threadEmails) {
-          updateEmailLabelIds(email.id, (email.labelIds || []).filter((l: string) => l !== "INBOX"));
+          updateEmailLabelIds(
+            email.id,
+            (email.labelIds || []).filter((l: string) => l !== "INBOX"),
+          );
         }
         dismissArchiveReady(threadId, accountId);
         const win = getMainWindow();
@@ -306,10 +279,7 @@ export function registerArchiveReadyIpc(): void {
         }
 
         const threadEmails = getEmailsByThread(threadId, accountId);
-        const inboxEmails = threadEmails.filter(
-          (e) =>
-            e.labelIds && e.labelIds.includes("INBOX")
-        );
+        const inboxEmails = threadEmails.filter((e) => e.labelIds && e.labelIds.includes("INBOX"));
 
         // Archive each email in the thread
         const archivedIds: string[] = [];
@@ -318,13 +288,13 @@ export function registerArchiveReadyIpc(): void {
             await client.archiveMessage(email.id);
             // Only update local DB after successful API call
             const labels = email.labelIds || [];
-            updateEmailLabelIds(email.id, labels.filter((l: string) => l !== "INBOX"));
+            updateEmailLabelIds(
+              email.id,
+              labels.filter((l: string) => l !== "INBOX"),
+            );
             archivedIds.push(email.id);
           } catch (err) {
-            log.error(
-              `[ArchiveReady] Failed to archive email ${email.id}:`,
-              err
-            );
+            log.error(`[ArchiveReady] Failed to archive email ${email.id}:`, err);
           }
         }
 
@@ -350,16 +320,13 @@ export function registerArchiveReadyIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Archive all ready threads
   ipcMain.handle(
     "archive-ready:archive-all",
-    async (
-      _,
-      { accountId }: { accountId: string }
-    ): Promise<IpcResponse<{ archived: number }>> => {
+    async (_, { accountId }: { accountId: string }): Promise<IpcResponse<{ archived: number }>> => {
       if (useFakeData) {
         const readyRows = getArchiveReadyThreads(accountId);
         const allRemovedIds: string[] = [];
@@ -368,7 +335,10 @@ export function registerArchiveReadyIpc(): void {
           const threadEmails = getEmailsByThread(row.threadId, accountId);
           // Remove all emails in thread (including SENT) so no ghost threads remain
           for (const email of threadEmails) {
-            updateEmailLabelIds(email.id, (email.labelIds || []).filter((l: string) => l !== "INBOX"));
+            updateEmailLabelIds(
+              email.id,
+              (email.labelIds || []).filter((l: string) => l !== "INBOX"),
+            );
             allRemovedIds.push(email.id);
           }
           dismissArchiveReady(row.threadId, accountId);
@@ -396,8 +366,7 @@ export function registerArchiveReadyIpc(): void {
         for (const row of readyRows) {
           const threadEmails = getEmailsByThread(row.threadId, accountId);
           const inboxEmails = threadEmails.filter(
-            (e) =>
-              e.labelIds && e.labelIds.includes("INBOX")
+            (e) => e.labelIds && e.labelIds.includes("INBOX"),
           );
 
           let threadArchived = false;
@@ -406,13 +375,13 @@ export function registerArchiveReadyIpc(): void {
               await client.archiveMessage(email.id);
               // Only update local DB after successful API call
               const labels = email.labelIds || [];
-              updateEmailLabelIds(email.id, labels.filter((l: string) => l !== "INBOX"));
+              updateEmailLabelIds(
+                email.id,
+                labels.filter((l: string) => l !== "INBOX"),
+              );
               threadArchived = true;
             } catch (err) {
-              log.error(
-                `[ArchiveReady] Failed to archive email ${email.id}:`,
-                err
-              );
+              log.error(`[ArchiveReady] Failed to archive email ${email.id}:`, err);
             }
           }
 
@@ -442,6 +411,6 @@ export function registerArchiveReadyIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 }

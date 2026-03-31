@@ -1,7 +1,6 @@
 import { BrowserWindow } from "electron";
-import { GmailClient } from "./gmail-client";
+import { type GmailClient } from "./gmail-client";
 import { getAllEmailIds, saveEmail } from "../db";
-import type { Email } from "../../shared/types";
 import { createLogger } from "./logger";
 
 const log = createLogger("background-sync");
@@ -51,14 +50,16 @@ class BackgroundSyncService {
       log.info("[BackgroundSync] Fetching all mail IDs...");
       const allMailResults = await client.searchAllEmails(
         "in:anywhere -in:trash -in:spam",
-        10000 // max emails to sync
+        10000, // max emails to sync
       );
       log.info(`[BackgroundSync] Found ${allMailResults.length} total emails in account`);
 
       // Filter out already-synced emails
       const existingIds = new Set(getAllEmailIds(accountId));
       const toSync = allMailResults.filter((m) => !existingIds.has(m.id));
-      log.info(`[BackgroundSync] ${toSync.length} emails need syncing (${existingIds.size} already synced)`);
+      log.info(
+        `[BackgroundSync] ${toSync.length} emails need syncing (${existingIds.size} already synced)`,
+      );
 
       state.totalCount = toSync.length;
       this.emitProgress(accountId, "running", 0, toSync.length);
@@ -115,7 +116,7 @@ class BackgroundSyncService {
   private async syncBatch(
     accountId: string,
     client: GmailClient,
-    batch: Array<{ id: string; threadId: string }>
+    batch: Array<{ id: string; threadId: string }>,
   ): Promise<void> {
     for (const { id } of batch) {
       try {
@@ -173,7 +174,7 @@ class BackgroundSyncService {
     status: BackgroundSyncProgress["status"],
     synced: number,
     total: number,
-    error?: string
+    error?: string,
   ): void {
     const window = this.getMainWindow();
     if (window) {

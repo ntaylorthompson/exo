@@ -1,8 +1,4 @@
-import type {
-  ExtensionAPI,
-  EnrichmentProvider,
-  BadgeProvider,
-} from "../../shared/extension-types";
+import type { ExtensionAPI, EnrichmentProvider, BadgeProvider } from "../../shared/extension-types";
 import { getExtensionStorage, setExtensionStorage } from "../db";
 import { createLogger } from "../services/logger";
 
@@ -13,19 +9,24 @@ let enrichmentProviderRegistry: Map<string, EnrichmentProvider> = new Map();
 let badgeProviderRegistry: Map<string, BadgeProvider> = new Map();
 
 // Callback for extension auth required events (set by extension-host)
-let authRequiredCallback: ((extensionId: string, displayName: string, message?: string) => void) | null = null;
+let authRequiredCallback:
+  | ((extensionId: string, displayName: string, message?: string) => void)
+  | null = null;
 
 // Extension display names (populated during registration)
 const extensionDisplayNames: Map<string, string> = new Map();
 
 // Auth handlers registered by extensions (extensionId -> { handler, checkAuth? })
-const authHandlers: Map<string, { handler: () => Promise<void>; checkAuth?: () => Promise<boolean> }> = new Map();
+const authHandlers: Map<
+  string,
+  { handler: () => Promise<void>; checkAuth?: () => Promise<boolean> }
+> = new Map();
 
 /**
  * Set the callback for extension auth required events
  */
 export function setAuthRequiredCallback(
-  callback: (extensionId: string, displayName: string, message?: string) => void
+  callback: (extensionId: string, displayName: string, message?: string) => void,
 ): void {
   authRequiredCallback = callback;
 }
@@ -42,7 +43,7 @@ export function registerExtensionDisplayName(extensionId: string, displayName: s
  */
 export function setRegistries(
   enrichmentProviders: Map<string, EnrichmentProvider>,
-  badgeProviders: Map<string, BadgeProvider>
+  badgeProviders: Map<string, BadgeProvider>,
 ): void {
   enrichmentProviderRegistry = enrichmentProviders;
   badgeProviderRegistry = badgeProviders;
@@ -91,7 +92,10 @@ export function createExtensionAPI(extensionId: string): ExtensionAPI {
       authRequiredCallback?.(extensionId, displayName, message);
     },
 
-    registerAuthHandler(handler: () => Promise<void>, options?: { checkAuth?: () => Promise<boolean> }): void {
+    registerAuthHandler(
+      handler: () => Promise<void>,
+      options?: { checkAuth?: () => Promise<boolean> },
+    ): void {
       log.info(`[Extensions] Registered auth handler for ${extensionId}`);
       authHandlers.set(extensionId, { handler, checkAuth: options?.checkAuth });
     },

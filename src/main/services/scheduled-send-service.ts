@@ -124,15 +124,15 @@ class ScheduledSendService extends EventEmitter {
   }
 
   // Type-safe event methods
-  on(event: ScheduledSendEvent, listener: (...args: any[]) => void): this {
+  on(event: ScheduledSendEvent, listener: (...args: unknown[]) => void): this {
     return super.on(event, listener);
   }
 
-  off(event: ScheduledSendEvent, listener: (...args: any[]) => void): this {
+  off(event: ScheduledSendEvent, listener: (...args: unknown[]) => void): this {
     return super.off(event, listener);
   }
 
-  emit(event: ScheduledSendEvent, ...args: any[]): boolean {
+  emit(event: ScheduledSendEvent, ...args: unknown[]): boolean {
     return super.emit(event, ...args);
   }
 }

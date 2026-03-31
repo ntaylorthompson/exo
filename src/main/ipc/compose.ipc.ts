@@ -1,13 +1,33 @@
 import { ipcMain, BrowserWindow } from "electron";
 import { randomUUID } from "crypto";
 import { getEmailSyncService } from "./sync.ipc";
-import { getEmail, getAccounts, saveLocalDraft, getLocalDraft, getLocalDrafts, deleteLocalDraft, updateLocalDraftGmailId, deleteArchiveReadyForThreads, getArchiveReadyForThread, getEmailsByThread, updateEmailLabelIds } from "../db";
+import {
+  getEmail,
+  getAccounts,
+  saveLocalDraft,
+  getLocalDraft,
+  getLocalDrafts,
+  deleteLocalDraft,
+  updateLocalDraftGmailId,
+  deleteArchiveReadyForThreads,
+  getArchiveReadyForThread,
+  getEmailsByThread,
+  updateEmailLabelIds,
+} from "../db";
 import { networkMonitor } from "../services/network-monitor";
 import { outboxService } from "../services/outbox-service";
 import { prefetchService } from "../services/prefetch-service";
 import { isNetworkError } from "../services/network-errors";
 import { learnFromDraftEdit } from "../services/draft-edit-learner";
-import type { IpcResponse, LocalDraft, GmailDraft, ComposeMode, ReplyInfo, SendMessageOptions, SendMessageResult } from "../../shared/types";
+import type {
+  IpcResponse,
+  LocalDraft,
+  GmailDraft,
+  ComposeMode,
+  ReplyInfo,
+  SendMessageOptions,
+  SendMessageResult,
+} from "../../shared/types";
 import { formatAddressesWithNames, extractThreadNames } from "../utils/address-formatting";
 import { createLogger } from "../services/logger";
 
@@ -23,8 +43,12 @@ const useFakeData = isTestMode || isDemoMode;
 function queueToOutbox(options: SendMessageOptions & { accountId: string }): SendMessageResult {
   // Pre-format addresses with display names so they're stored correctly
   const formattedTo = formatAddressesWithNames(options.to, options.recipientNames);
-  const formattedCc = options.cc ? formatAddressesWithNames(options.cc, options.recipientNames) : undefined;
-  const formattedBcc = options.bcc ? formatAddressesWithNames(options.bcc, options.recipientNames) : undefined;
+  const formattedCc = options.cc
+    ? formatAddressesWithNames(options.cc, options.recipientNames)
+    : undefined;
+  const formattedBcc = options.bcc
+    ? formatAddressesWithNames(options.bcc, options.recipientNames)
+    : undefined;
 
   const id = outboxService.queue({
     accountId: options.accountId,
@@ -73,7 +97,11 @@ function parseAddressList(header: string): string[] {
  * userEmail is the current account's email so we can exclude the user from recipients.
  * The email body is HTML, so we need to properly quote it.
  */
-function extractReplyInfo(email: ReturnType<typeof getEmail>, mode: ComposeMode, userEmail?: string): ReplyInfo | null {
+function extractReplyInfo(
+  email: ReturnType<typeof getEmail>,
+  mode: ComposeMode,
+  userEmail?: string,
+): ReplyInfo | null {
   if (!email) return null;
 
   // Parse the From header to get email address
@@ -84,7 +112,7 @@ function extractReplyInfo(email: ReturnType<typeof getEmail>, mode: ComposeMode,
   const ccAddresses = email.cc ? parseAddressList(email.cc) : [];
 
   // For reply-all: CC = everyone from To + CC, minus the sender (already in To) and ourselves
-  let cc: string[] = [];
+  const cc: string[] = [];
   if (mode === "reply-all") {
     const exclude = new Set([fromEmail.toLowerCase()]);
     if (userEmail) exclude.add(userEmail.toLowerCase());
@@ -160,9 +188,10 @@ function extractReplyInfo(email: ReturnType<typeof getEmail>, mode: ComposeMode,
     originalBody,
     attribution,
     // Include attachment metadata when forwarding so they can be re-attached
-    ...(mode === "forward" && email.attachments?.length && {
-      forwardedAttachments: email.attachments,
-    }),
+    ...(mode === "forward" &&
+      email.attachments?.length && {
+        forwardedAttachments: email.attachments,
+      }),
   };
 }
 
@@ -190,9 +219,11 @@ function triggerThreadReanalysis(threadId: string, accountId: string): void {
   if (existing?.isReady) {
     deleteArchiveReadyForThreads([threadId], accountId);
     // Notify renderer to remove from archive-ready set
-    import("./prefetch.ipc").then(({ notifyArchiveReady }) => {
-      notifyArchiveReady(threadId, accountId, false, "");
-    }).catch((err) => log.error({ err }, "Unhandled error"));
+    import("./prefetch.ipc")
+      .then(({ notifyArchiveReady }) => {
+        notifyArchiveReady(threadId, accountId, false, "");
+      })
+      .catch((err) => log.error({ err }, "Unhandled error"));
   }
 
   // Cancel any previously pending reanalysis for this thread
@@ -229,7 +260,10 @@ async function markThreadAsReadAfterSend(
     for (const email of threadEmails) {
       const labels = email.labelIds || [];
       if (labels.includes("UNREAD")) {
-        updateEmailLabelIds(email.id, labels.filter(l => l !== "UNREAD"));
+        updateEmailLabelIds(
+          email.id,
+          labels.filter((l) => l !== "UNREAD"),
+        );
       }
     }
   } catch (error) {
@@ -254,7 +288,10 @@ export function registerComposeIpc(): void {
   // Send a new message
   ipcMain.handle(
     "compose:send",
-    async (_, options: SendMessageOptions & { accountId: string }): Promise<IpcResponse<SendMessageResult>> => {
+    async (
+      _,
+      options: SendMessageOptions & { accountId: string },
+    ): Promise<IpcResponse<SendMessageResult>> => {
       if (useFakeData) {
         log.info("[DEMO] Sending message to:", options.to);
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -265,20 +302,27 @@ export function registerComposeIpc(): void {
             accountId: options.accountId,
             sentBodyHtml: options.bodyHtml || "",
             sentBodyText: options.bodyText,
-          }).then((result) => {
-            if (result && (result.promoted.length > 0 || result.draftMemoriesCreated > 0)) {
-              log.info(`[DEMO] Draft edit learning: ${result.promoted.length} promoted, ${result.draftMemoriesCreated} draft memories created/voted`);
-              notifyDraftEditLearned({
-                promoted: result.promoted,
-                draftMemoriesCreated: result.draftMemoriesCreated,
-                draftMemoryIds: result.draftMemoryIds,
-              });
-            }
-          }).catch((err) => {
-            log.error({ err: err }, "[DEMO] Draft edit learning failed");
-          });
+          })
+            .then((result) => {
+              if (result && (result.promoted.length > 0 || result.draftMemoriesCreated > 0)) {
+                log.info(
+                  `[DEMO] Draft edit learning: ${result.promoted.length} promoted, ${result.draftMemoriesCreated} draft memories created/voted`,
+                );
+                notifyDraftEditLearned({
+                  promoted: result.promoted,
+                  draftMemoriesCreated: result.draftMemoriesCreated,
+                  draftMemoryIds: result.draftMemoryIds,
+                });
+              }
+            })
+            .catch((err) => {
+              log.error({ err: err }, "[DEMO] Draft edit learning failed");
+            });
         }
-        return { success: true, data: { id: `demo-sent-${Date.now()}`, threadId: `demo-thread-${Date.now()}` } };
+        return {
+          success: true,
+          data: { id: `demo-sent-${Date.now()}`, threadId: `demo-thread-${Date.now()}` },
+        };
       }
 
       // Augment recipientNames from thread context so MIME addresses include display names.
@@ -321,18 +365,22 @@ export function registerComposeIpc(): void {
             accountId: options.accountId,
             sentBodyHtml: options.bodyHtml || "",
             sentBodyText: options.bodyText,
-          }).then((result) => {
-            if (result && (result.promoted.length > 0 || result.draftMemoriesCreated > 0)) {
-              log.info(`[Compose] Draft edit learning: ${result.promoted.length} promoted, ${result.draftMemoriesCreated} draft memories created/voted`);
-              notifyDraftEditLearned({
-                promoted: result.promoted,
-                draftMemoriesCreated: result.draftMemoriesCreated,
-                draftMemoryIds: result.draftMemoryIds,
-              });
-            }
-          }).catch((err) => {
-            log.error({ err: err }, "[Compose] Draft edit learning failed");
-          });
+          })
+            .then((result) => {
+              if (result && (result.promoted.length > 0 || result.draftMemoriesCreated > 0)) {
+                log.info(
+                  `[Compose] Draft edit learning: ${result.promoted.length} promoted, ${result.draftMemoriesCreated} draft memories created/voted`,
+                );
+                notifyDraftEditLearned({
+                  promoted: result.promoted,
+                  draftMemoriesCreated: result.draftMemoriesCreated,
+                  draftMemoryIds: result.draftMemoryIds,
+                });
+              }
+            })
+            .catch((err) => {
+              log.error({ err: err }, "[Compose] Draft edit learning failed");
+            });
         }
 
         return { success: true, data: { ...result, queued: false } };
@@ -351,13 +399,16 @@ export function registerComposeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to send message",
         };
       }
-    }
+    },
   );
 
   // Save a draft locally
   ipcMain.handle(
     "compose:save-local-draft",
-    async (_, draft: Omit<LocalDraft, "id" | "createdAt" | "updatedAt">): Promise<IpcResponse<LocalDraft>> => {
+    async (
+      _,
+      draft: Omit<LocalDraft, "id" | "createdAt" | "updatedAt">,
+    ): Promise<IpcResponse<LocalDraft>> => {
       try {
         const now = Date.now();
         const fullDraft: LocalDraft = {
@@ -375,13 +426,16 @@ export function registerComposeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to save draft",
         };
       }
-    }
+    },
   );
 
   // Update an existing local draft
   ipcMain.handle(
     "compose:update-local-draft",
-    async (_, { draftId, updates }: { draftId: string; updates: Partial<LocalDraft> }): Promise<IpcResponse<LocalDraft>> => {
+    async (
+      _,
+      { draftId, updates }: { draftId: string; updates: Partial<LocalDraft> },
+    ): Promise<IpcResponse<LocalDraft>> => {
       try {
         const existing = getLocalDraft(draftId);
         if (!existing) {
@@ -404,7 +458,7 @@ export function registerComposeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to update draft",
         };
       }
-    }
+    },
   );
 
   // Get a local draft
@@ -420,7 +474,7 @@ export function registerComposeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to get draft",
         };
       }
-    }
+    },
   );
 
   // List local drafts
@@ -436,7 +490,7 @@ export function registerComposeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to list drafts",
         };
       }
-    }
+    },
   );
 
   // Delete a local draft
@@ -452,13 +506,16 @@ export function registerComposeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to delete draft",
         };
       }
-    }
+    },
   );
 
   // Save draft to Gmail
   ipcMain.handle(
     "compose:save-gmail-draft",
-    async (_, { localDraftId, accountId }: { localDraftId: string; accountId: string }): Promise<IpcResponse<{ gmailDraftId: string }>> => {
+    async (
+      _,
+      { localDraftId, accountId }: { localDraftId: string; accountId: string },
+    ): Promise<IpcResponse<{ gmailDraftId: string }>> => {
       if (useFakeData) {
         log.info("[DEMO] Saving Gmail draft");
         await new Promise((resolve) => setTimeout(resolve, 300));
@@ -498,17 +555,23 @@ export function registerComposeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to save Gmail draft",
         };
       }
-    }
+    },
   );
 
   // Send an existing Gmail draft
   ipcMain.handle(
     "compose:send-gmail-draft",
-    async (_, { gmailDraftId, accountId }: { gmailDraftId: string; accountId: string }): Promise<IpcResponse<{ id: string; threadId: string }>> => {
+    async (
+      _,
+      { gmailDraftId, accountId }: { gmailDraftId: string; accountId: string },
+    ): Promise<IpcResponse<{ id: string; threadId: string }>> => {
       if (useFakeData) {
         log.info("[DEMO] Sending Gmail draft:", gmailDraftId);
         await new Promise((resolve) => setTimeout(resolve, 500));
-        return { success: true, data: { id: `demo-sent-${Date.now()}`, threadId: `demo-thread-${Date.now()}` } };
+        return {
+          success: true,
+          data: { id: `demo-sent-${Date.now()}`, threadId: `demo-thread-${Date.now()}` },
+        };
       }
 
       try {
@@ -532,13 +595,16 @@ export function registerComposeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to send draft",
         };
       }
-    }
+    },
   );
 
   // List Gmail drafts
   ipcMain.handle(
     "compose:list-gmail-drafts",
-    async (_, { accountId, maxResults }: { accountId: string; maxResults?: number }): Promise<IpcResponse<GmailDraft[]>> => {
+    async (
+      _,
+      { accountId, maxResults }: { accountId: string; maxResults?: number },
+    ): Promise<IpcResponse<GmailDraft[]>> => {
       if (useFakeData) {
         return { success: true, data: [] };
       }
@@ -558,13 +624,16 @@ export function registerComposeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to list Gmail drafts",
         };
       }
-    }
+    },
   );
 
   // Get a Gmail draft
   ipcMain.handle(
     "compose:get-gmail-draft",
-    async (_, { gmailDraftId, accountId }: { gmailDraftId: string; accountId: string }): Promise<IpcResponse<GmailDraft | null>> => {
+    async (
+      _,
+      { gmailDraftId, accountId }: { gmailDraftId: string; accountId: string },
+    ): Promise<IpcResponse<GmailDraft | null>> => {
       if (useFakeData) {
         return { success: true, data: null };
       }
@@ -584,13 +653,16 @@ export function registerComposeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to get Gmail draft",
         };
       }
-    }
+    },
   );
 
   // Delete a Gmail draft
   ipcMain.handle(
     "compose:delete-gmail-draft",
-    async (_, { gmailDraftId, accountId }: { gmailDraftId: string; accountId: string }): Promise<IpcResponse<void>> => {
+    async (
+      _,
+      { gmailDraftId, accountId }: { gmailDraftId: string; accountId: string },
+    ): Promise<IpcResponse<void>> => {
       if (useFakeData) {
         log.info("[DEMO] Deleting Gmail draft:", gmailDraftId);
         return { success: true, data: undefined };
@@ -611,13 +683,16 @@ export function registerComposeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to delete Gmail draft",
         };
       }
-    }
+    },
   );
 
   // Get reply info for an email
   ipcMain.handle(
     "compose:get-reply-info",
-    async (_, { emailId, mode, accountId }: { emailId: string; mode: ComposeMode; accountId: string }): Promise<IpcResponse<ReplyInfo | null>> => {
+    async (
+      _,
+      { emailId, mode, accountId }: { emailId: string; mode: ComposeMode; accountId: string },
+    ): Promise<IpcResponse<ReplyInfo | null>> => {
       try {
         const email = getEmail(emailId);
         if (!email) {
@@ -653,13 +728,16 @@ export function registerComposeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to get reply info",
         };
       }
-    }
+    },
   );
 
   // Email actions (archive, trash, star, read)
   ipcMain.handle(
     "compose:archive",
-    async (_, { messageId, accountId }: { messageId: string; accountId: string }): Promise<IpcResponse<void>> => {
+    async (
+      _,
+      { messageId, accountId }: { messageId: string; accountId: string },
+    ): Promise<IpcResponse<void>> => {
       if (useFakeData) {
         log.info("[DEMO] Archiving message:", messageId);
         return { success: true, data: undefined };
@@ -680,12 +758,15 @@ export function registerComposeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to archive message",
         };
       }
-    }
+    },
   );
 
   ipcMain.handle(
     "compose:trash",
-    async (_, { messageId, accountId }: { messageId: string; accountId: string }): Promise<IpcResponse<void>> => {
+    async (
+      _,
+      { messageId, accountId }: { messageId: string; accountId: string },
+    ): Promise<IpcResponse<void>> => {
       if (useFakeData) {
         log.info("[DEMO] Trashing message:", messageId);
         return { success: true, data: undefined };
@@ -706,12 +787,15 @@ export function registerComposeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to trash message",
         };
       }
-    }
+    },
   );
 
   ipcMain.handle(
     "compose:star",
-    async (_, { messageId, accountId, starred }: { messageId: string; accountId: string; starred: boolean }): Promise<IpcResponse<void>> => {
+    async (
+      _,
+      { messageId, accountId, starred }: { messageId: string; accountId: string; starred: boolean },
+    ): Promise<IpcResponse<void>> => {
       if (useFakeData) {
         log.info("[DEMO] Setting star:", messageId, starred);
         return { success: true, data: undefined };
@@ -732,12 +816,15 @@ export function registerComposeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to star message",
         };
       }
-    }
+    },
   );
 
   ipcMain.handle(
     "compose:mark-read",
-    async (_, { messageId, accountId, read }: { messageId: string; accountId: string; read: boolean }): Promise<IpcResponse<void>> => {
+    async (
+      _,
+      { messageId, accountId, read }: { messageId: string; accountId: string; read: boolean },
+    ): Promise<IpcResponse<void>> => {
       if (useFakeData) {
         log.info("[DEMO] Setting read:", messageId, read);
         return { success: true, data: undefined };
@@ -758,6 +845,6 @@ export function registerComposeIpc(): void {
           error: error instanceof Error ? error.message : "Failed to mark message as read",
         };
       }
-    }
+    },
   );
 }

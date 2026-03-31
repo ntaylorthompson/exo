@@ -129,11 +129,14 @@ class AutoUpdateService extends EventEmitter {
       });
 
       // Check once per day
-      this.checkInterval = setInterval(() => {
-        this.checkForUpdates().catch((err) => {
-          log.error({ err }, "Periodic check failed");
-        });
-      }, 24 * 60 * 60 * 1000);
+      this.checkInterval = setInterval(
+        () => {
+          this.checkForUpdates().catch((err) => {
+            log.error({ err }, "Periodic check failed");
+          });
+        },
+        24 * 60 * 60 * 1000,
+      );
     }, 30_000);
   }
 

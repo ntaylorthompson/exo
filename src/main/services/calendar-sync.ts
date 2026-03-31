@@ -9,18 +9,17 @@ import {
   invalidateCalendarAccountCache,
 } from "../../extensions/mail-ext-calendar/src/google-calendar-client";
 import {
-import { createLogger } from "./logger";
-
-const log = createLogger("calendar-sync");
   saveCalendarEvents,
   deleteCalendarEvent,
   getCalendarSyncState,
   saveCalendarSyncState,
-  getCalendarSyncStates,
   clearSingleCalendarData,
   getAccounts,
   type CalendarEventRow,
 } from "../db";
+import { createLogger } from "./logger";
+
+const log = createLogger("calendar-sync");
 
 const SYNC_INTERVAL = 60_000; // 60 seconds
 
@@ -137,7 +136,7 @@ class CalendarSyncService {
     accountId: string,
     calendarId: string,
     calendarName: string,
-    calendarColor: string
+    calendarColor: string,
   ): Promise<boolean> {
     const syncState = getCalendarSyncState(accountId, calendarId);
     const syncToken = syncState?.syncToken || null;
@@ -147,7 +146,11 @@ class CalendarSyncService {
 
     try {
       const result = await syncCalendarEvents(
-        accountId, calendarId, calendarName, calendarColor, syncToken
+        accountId,
+        calendarId,
+        calendarName,
+        calendarColor,
+        syncToken,
       );
 
       // Handle 410 GONE — clear only this calendar and do full sync
@@ -205,7 +208,12 @@ class CalendarSyncService {
         defaultVisible = account ? calendarId === account.email : true;
       }
       saveCalendarSyncState(
-        accountId, calendarId, result.nextSyncToken, calendarName, calendarColor, defaultVisible
+        accountId,
+        calendarId,
+        result.nextSyncToken,
+        calendarName,
+        calendarColor,
+        defaultVisible,
       );
 
       return changed;

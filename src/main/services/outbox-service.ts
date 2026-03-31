@@ -30,7 +30,13 @@ export type OutboxMessage = {
   bodyText?: string;
   inReplyTo?: string;
   references?: string;
-  attachments?: Array<{ filename: string; mimeType: string; path?: string; content?: string; size?: number }>;
+  attachments?: Array<{
+    filename: string;
+    mimeType: string;
+    path?: string;
+    content?: string;
+    size?: number;
+  }>;
 };
 
 // Events emitted by the outbox service
@@ -388,8 +394,15 @@ class OutboxService extends EventEmitter {
     } else {
       // Temporarily failed, will be retried
       updateOutboxStatus(item.id, "pending", errorMessage, incrementRetry);
-      log.warn(`[Outbox] Message ${item.id} failed (retry ${newRetryCount}/${MAX_RETRIES}): ${errorMessage}`);
-      this.emit("failed", { id: item.id, error: errorMessage, permanent: false, retryCount: newRetryCount });
+      log.warn(
+        `[Outbox] Message ${item.id} failed (retry ${newRetryCount}/${MAX_RETRIES}): ${errorMessage}`,
+      );
+      this.emit("failed", {
+        id: item.id,
+        error: errorMessage,
+        permanent: false,
+        retryCount: newRetryCount,
+      });
     }
 
     this.emit("statsChanged", this.getStats());
@@ -407,23 +420,23 @@ class OutboxService extends EventEmitter {
       msg.includes("ECONNRESET") ||
       msg.includes("socket hang up") ||
       msg.includes("network") ||
-      (error as any)?.code === "ENOTFOUND" ||
-      (error as any)?.code === "ETIMEDOUT" ||
-      (error as any)?.code === "ECONNREFUSED" ||
-      (error as any)?.code === "ECONNRESET"
+      (error as NodeJS.ErrnoException)?.code === "ENOTFOUND" ||
+      (error as NodeJS.ErrnoException)?.code === "ETIMEDOUT" ||
+      (error as NodeJS.ErrnoException)?.code === "ECONNREFUSED" ||
+      (error as NodeJS.ErrnoException)?.code === "ECONNRESET"
     );
   }
 
   // Type-safe event methods
-  on(event: OutboxEvent, listener: (...args: any[]) => void): this {
+  on(event: OutboxEvent, listener: (...args: unknown[]) => void): this {
     return super.on(event, listener);
   }
 
-  off(event: OutboxEvent, listener: (...args: any[]) => void): this {
+  off(event: OutboxEvent, listener: (...args: unknown[]) => void): this {
     return super.off(event, listener);
   }
 
-  emit(event: OutboxEvent, ...args: any[]): boolean {
+  emit(event: OutboxEvent, ...args: unknown[]): boolean {
     return super.emit(event, ...args);
   }
 }

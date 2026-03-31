@@ -66,7 +66,9 @@ export function initDevData(): void {
         filesToCopy.push(entry);
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   for (const file of filesToCopy) {
     const src = join(prodDir, file);

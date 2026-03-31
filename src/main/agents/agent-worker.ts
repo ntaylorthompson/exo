@@ -7,7 +7,6 @@
  */
 
 import type {
-  AgentContext,
   AgentFrameworkConfig,
   CoordinatorMessage,
   DbProxyFn,
@@ -31,7 +30,12 @@ let orchestrator: AgentOrchestrator | null = null;
 /** Pending proxy requests awaiting responses from the main process */
 const pendingRequests = new Map<
   string,
-  { resolve: (value: unknown) => void; reject: (reason: Error) => void; timer: ReturnType<typeof setTimeout>; taskId: string | null }
+  {
+    resolve: (value: unknown) => void;
+    reject: (reason: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+    taskId: string | null;
+  }
 >();
 
 let requestCounter = 0;
@@ -50,10 +54,7 @@ function generateRequestId(): string {
  * Send a message to the main process and wait for a response.
  * DB requests have a 10s timeout, Gmail requests have a 30s timeout.
  */
-function proxyRequest(
-  msg: CoordinatorMessage,
-  timeoutMs: number
-): Promise<unknown> {
+function proxyRequest(msg: CoordinatorMessage, timeoutMs: number): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const requestId = (msg as { requestId: string }).requestId;
 
@@ -75,10 +76,7 @@ const DB_TIMEOUT_MS = 10_000;
 const dbProxy: DbProxyFn = (method: string, ...args: unknown[]): Promise<unknown> => {
   const requestId = generateRequestId();
   const timeoutMs = LONG_RUNNING_DB_METHODS.has(method) ? LONG_RUNNING_TIMEOUT_MS : DB_TIMEOUT_MS;
-  return proxyRequest(
-    { type: "db_request", requestId, method, args },
-    timeoutMs
-  );
+  return proxyRequest({ type: "db_request", requestId, method, args }, timeoutMs);
 };
 
 const gmailProxy: GmailProxyFn = (
@@ -87,10 +85,7 @@ const gmailProxy: GmailProxyFn = (
   ...args: unknown[]
 ): Promise<unknown> => {
   const requestId = generateRequestId();
-  return proxyRequest(
-    { type: "gmail_request", requestId, method, accountId, args },
-    30_000
-  );
+  return proxyRequest({ type: "gmail_request", requestId, method, accountId, args }, 30_000);
 };
 
 const netFetchProxy: NetFetchProxyFn = (
@@ -101,7 +96,7 @@ const netFetchProxy: NetFetchProxyFn = (
   // The coordinator always sends a NetFetchResult; the proxy boundary is untyped.
   return proxyRequest(
     { type: "net_fetch_request", requestId, url, options },
-    300_000
+    300_000,
   ) as ReturnType<NetFetchProxyFn>;
 };
 
@@ -147,15 +142,24 @@ function handleMainMessage(msg: WorkerMessage): void {
         gmailProxy,
         netFetchProxy,
         config: msg.config,
-        setActiveTaskId: (taskId) => { activeTaskId = taskId; },
+        setActiveTaskId: (taskId) => {
+          activeTaskId = taskId;
+        },
       });
       log.info("[AgentWorker] Initialized with orchestrator");
       break;
 
     case "run": {
       if (!orchestrator) {
-        emitToRenderer(msg.taskId, { type: "error", message: "Agent orchestrator not initialized" });
-        emitToRenderer(msg.taskId, { type: "state", state: "failed", message: "Orchestrator not initialized" });
+        emitToRenderer(msg.taskId, {
+          type: "error",
+          message: "Agent orchestrator not initialized",
+        });
+        emitToRenderer(msg.taskId, {
+          type: "state",
+          state: "failed",
+          message: "Orchestrator not initialized",
+        });
         closeTaskPort(msg.taskId);
         return;
       }
@@ -226,10 +230,13 @@ function handleMainMessage(msg: WorkerMessage): void {
       }
       try {
         // Worker is CJS — plain require() works for loading provider bundles
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const mod = require(msg.providerPath);
         const factory = mod.default || mod.createProvider;
         if (typeof factory !== "function") {
-          throw new Error(`Provider module at ${msg.providerPath} does not export a factory function (default or createProvider)`);
+          throw new Error(
+            `Provider module at ${msg.providerPath} does not export a factory function (default or createProvider)`,
+          );
         }
         const provider = factory(msg.config);
         orchestrator.registerProvider(provider);
@@ -285,22 +292,25 @@ function handleMainMessage(msg: WorkerMessage): void {
           message: "Health check timed out",
         } satisfies CoordinatorMessage);
       }, 5000);
-      provider.isAvailable().then((available) => {
-        clearTimeout(healthTimeout);
-        process.parentPort.postMessage({
-          type: "provider_health",
-          providerId: msg.providerId,
-          status: available ? "connected" : "not_configured",
-        } satisfies CoordinatorMessage);
-      }).catch((err) => {
-        clearTimeout(healthTimeout);
-        process.parentPort.postMessage({
-          type: "provider_health",
-          providerId: msg.providerId,
-          status: "error",
-          message: err instanceof Error ? err.message : String(err),
-        } satisfies CoordinatorMessage);
-      });
+      provider
+        .isAvailable()
+        .then((available) => {
+          clearTimeout(healthTimeout);
+          process.parentPort.postMessage({
+            type: "provider_health",
+            providerId: msg.providerId,
+            status: available ? "connected" : "not_configured",
+          } satisfies CoordinatorMessage);
+        })
+        .catch((err) => {
+          clearTimeout(healthTimeout);
+          process.parentPort.postMessage({
+            type: "provider_health",
+            providerId: msg.providerId,
+            status: "error",
+            message: err instanceof Error ? err.message : String(err),
+          } satisfies CoordinatorMessage);
+        });
       break;
     }
 

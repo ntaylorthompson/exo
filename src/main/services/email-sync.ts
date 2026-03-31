@@ -1,6 +1,18 @@
-import { BrowserWindow } from "electron";
-import { GmailClient, isAuthError } from "./gmail-client";
-import { saveEmail, deleteEmail, getHistoryId, setHistoryId, hasEmailsForAccount, getEmailIds, getInboxThreadIds, getEmail, updateEmailLabelIds, deleteArchiveReadyForThreads, getArchiveReadyForThread, batchInsertOnboardingSkips } from "../db";
+import { type GmailClient, isAuthError } from "./gmail-client";
+import {
+  saveEmail,
+  deleteEmail,
+  getHistoryId,
+  setHistoryId,
+  hasEmailsForAccount,
+  getEmailIds,
+  getInboxThreadIds,
+  getEmail,
+  updateEmailLabelIds,
+  deleteArchiveReadyForThreads,
+  getArchiveReadyForThread,
+  batchInsertOnboardingSkips,
+} from "../db";
 import { cleanupStaleDraftsForThread, deleteGmailDraftById } from "./gmail-draft-sync";
 import { prefetchService } from "./prefetch-service";
 import { snoozeService } from "./snooze-service";
@@ -46,10 +58,16 @@ class EmailSyncService {
   private onNewSentEmails?: (accountId: string, emails: DashboardEmail[]) => void;
   private onSyncStatusChange?: (accountId: string, status: SyncStatus) => void;
   private onEmailsRemoved?: (accountId: string, emailIds: string[]) => void;
-  private onEmailsUpdated?: (accountId: string, updates: { emailId: string; labelIds: string[] }[]) => void;
+  private onEmailsUpdated?: (
+    accountId: string,
+    updates: { emailId: string; labelIds: string[] }[],
+  ) => void;
   private onAuthErrorCallback?: (accountId: string, email: string) => void;
   private onDraftsRemoved?: (accountId: string, emailIds: string[]) => void;
-  private onSyncProgress?: (accountId: string, progress: { fetched: number; total: number }) => void;
+  private onSyncProgress?: (
+    accountId: string,
+    progress: { fetched: number; total: number },
+  ) => void;
   private networkListenersSetup: boolean = false;
 
   /**
@@ -131,7 +149,9 @@ class EmailSyncService {
       // New account or no emails - clear history ID so full sync happens
       // Note: getProfile() sets lastHistoryId, so we must explicitly clear it
       client.setLastHistoryId(null);
-      log.info(`[Sync] No stored emails for ${profile.emailAddress}, will do full sync (historyId=${storedHistoryId}, hasEmails=${hasExistingEmails})`);
+      log.info(
+        `[Sync] No stored emails for ${profile.emailAddress}, will do full sync (historyId=${storedHistoryId}, hasEmails=${hasExistingEmails})`,
+      );
     }
 
     this.accounts.set(accountId, {
@@ -144,7 +164,9 @@ class EmailSyncService {
       needsFirstSyncTriage: !hasCompletedFullSync,
     });
 
-    log.info(`[Sync] Registered account: ${profile.emailAddress} (${accountId}, needsFirstSyncTriage=${!hasCompletedFullSync})`);
+    log.info(
+      `[Sync] Registered account: ${profile.emailAddress} (${accountId}, needsFirstSyncTriage=${!hasCompletedFullSync})`,
+    );
 
     return {
       accountId,
@@ -291,7 +313,9 @@ class EmailSyncService {
   /**
    * Set callback for email label updates (e.g. read/unread changes from external clients)
    */
-  onEmailsUpdatedCallback(callback: (accountId: string, updates: { emailId: string; labelIds: string[] }[]) => void): void {
+  onEmailsUpdatedCallback(
+    callback: (accountId: string, updates: { emailId: string; labelIds: string[] }[]) => void,
+  ): void {
     this.onEmailsUpdated = callback;
   }
 
@@ -314,7 +338,9 @@ class EmailSyncService {
   /**
    * Set callback for sync progress updates (fetched/total during full sync)
    */
-  onProgressChange(callback: (accountId: string, progress: { fetched: number; total: number }) => void): void {
+  onProgressChange(
+    callback: (accountId: string, progress: { fetched: number; total: number }) => void,
+  ): void {
     this.onSyncProgress = callback;
   }
 
@@ -336,11 +362,15 @@ class EmailSyncService {
 
     // Filter to only sent emails whose thread has an inbox email
     const existingIds = getEmailIds(accountId);
-    const toFetch = sentResults.filter(r => inboxThreadIds.has(r.threadId) && !existingIds.has(r.id));
+    const toFetch = sentResults.filter(
+      (r) => inboxThreadIds.has(r.threadId) && !existingIds.has(r.id),
+    );
 
     if (toFetch.length === 0) return;
 
-    log.info(`[Sync] Backfilling ${toFetch.length} sent emails for inbox threads (${account.email})`);
+    log.info(
+      `[Sync] Backfilling ${toFetch.length} sent emails for inbox threads (${account.email})`,
+    );
     const newEmails: DashboardEmail[] = [];
 
     for (let i = 0; i < toFetch.length; i++) {
@@ -348,7 +378,13 @@ class EmailSyncService {
         const email = await client.readEmail(toFetch[i].id);
         if (email) {
           saveEmail(email, accountId);
-          newEmails.push({ ...email, accountId, labelIds: email.labelIds, analysis: undefined, draft: undefined });
+          newEmails.push({
+            ...email,
+            accountId,
+            labelIds: email.labelIds,
+            analysis: undefined,
+            draft: undefined,
+          });
         }
       } catch (err) {
         log.error({ err: err }, `[Sync] Failed to fetch sent email ${toFetch[i].id}`);
@@ -366,11 +402,12 @@ class EmailSyncService {
       // Skip threads that already have a delayed reanalysis from compose (user
       // just replied through the app — the timer in compose.ipc.ts handles it).
       // Lazy import to avoid circular dependency (compose.ipc → sync.ipc → email-sync → compose.ipc).
-      const sentEmails = newEmails.filter(e => e.labelIds?.includes("SENT"));
+      const sentEmails = newEmails.filter((e) => e.labelIds?.includes("SENT"));
       if (sentEmails.length > 0) {
         const { hasPendingReanalysis } = await import("../ipc/compose.ipc");
-        const sentThreadIds = [...new Set(sentEmails.map(e => e.threadId))]
-          .filter(tid => !hasPendingReanalysis(tid));
+        const sentThreadIds = [...new Set(sentEmails.map((e) => e.threadId))].filter(
+          (tid) => !hasPendingReanalysis(tid),
+        );
         if (sentThreadIds.length > 0) {
           prefetchService.requeueArchiveReadyForThreads(sentThreadIds, accountId);
         }
@@ -392,7 +429,7 @@ class EmailSyncService {
 
     // Fetch recent sent emails (up to 500)
     const sentResults = await client.getEmailsByLabel("SENT", 500);
-    const toFetch = sentResults.filter(r => !existingIds.has(r.id));
+    const toFetch = sentResults.filter((r) => !existingIds.has(r.id));
 
     if (toFetch.length === 0) return;
 
@@ -404,7 +441,13 @@ class EmailSyncService {
         const email = await client.readEmail(toFetch[i].id);
         if (email) {
           saveEmail(email, accountId);
-          newEmails.push({ ...email, accountId, labelIds: email.labelIds, analysis: undefined, draft: undefined });
+          newEmails.push({
+            ...email,
+            accountId,
+            labelIds: email.labelIds,
+            analysis: undefined,
+            draft: undefined,
+          });
         }
       } catch (err) {
         log.error({ err: err }, `[Sync] Failed to fetch sent email ${toFetch[i].id}`);
@@ -457,8 +500,9 @@ class EmailSyncService {
       account.status = "idle";
       account.lastError = undefined;
       this.onSyncStatusChange?.(accountId, "idle");
-    } catch (error: any) {
-      log.error({ err: error.message }, `[Sync] Error syncing ${account.email}`);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      log.error({ err: errMsg }, `[Sync] Error syncing ${account.email}`);
 
       if (isAuthError(error)) {
         // Auth failure — stop sync for this account, notify caller
@@ -468,14 +512,14 @@ class EmailSyncService {
         account.lastError = "Authentication expired";
         this.onSyncStatusChange?.(accountId, "error");
         this.onAuthErrorCallback?.(accountId, account.email);
-      } else if (error.message === "HISTORY_EXPIRED") {
+      } else if (errMsg === "HISTORY_EXPIRED") {
         // History ID expired, do full sync
         log.info(`[Sync] History expired, doing full sync for ${account.email}`);
         try {
           await this.fullSync(accountId);
           account.status = "idle";
           this.onSyncStatusChange?.(accountId, "idle");
-        } catch (fullSyncError: any) {
+        } catch (fullSyncError: unknown) {
           if (isAuthError(fullSyncError)) {
             log.error(`[Sync] Auth error during full sync for ${account.email}`);
             this.stopSync(accountId);
@@ -485,7 +529,8 @@ class EmailSyncService {
             this.onAuthErrorCallback?.(accountId, account.email);
           } else {
             account.status = "error";
-            account.lastError = fullSyncError.message;
+            account.lastError =
+              fullSyncError instanceof Error ? fullSyncError.message : String(fullSyncError);
             this.onSyncStatusChange?.(accountId, "error");
           }
         }
@@ -502,7 +547,10 @@ class EmailSyncService {
    */
   static readonly MAX_SYNC_EMAILS = 2500;
 
-  private async fullSync(accountId: string, options?: { skipPrefetch?: boolean; suppressNotification?: boolean; runTriage?: boolean }): Promise<DashboardEmail[]> {
+  private async fullSync(
+    accountId: string,
+    options?: { skipPrefetch?: boolean; suppressNotification?: boolean; runTriage?: boolean },
+  ): Promise<DashboardEmail[]> {
     const account = this.accounts.get(accountId);
     if (!account) return [];
 
@@ -522,7 +570,7 @@ class EmailSyncService {
     log.info(`[Sync] fullSync existing emails: ${existingIds.size}`);
 
     // Filter to only new emails, then fetch full content concurrently
-    const newIds = searchResults.filter(r => !existingIds.has(r.id)).map(r => r.id);
+    const newIds = searchResults.filter((r) => !existingIds.has(r.id)).map((r) => r.id);
     log.info(`[Sync] fullSync fetching ${newIds.length} new emails (concurrent, batch size 10)`);
 
     // Emit initial progress
@@ -539,7 +587,7 @@ class EmailSyncService {
     // Process in chunks of 10, emitting each batch progressively
     for (let i = 0; i < newIds.length; i += 10) {
       const chunk = newIds.slice(i, i + 10);
-      const results = await Promise.allSettled(chunk.map(id => client.readEmail(id)));
+      const results = await Promise.allSettled(chunk.map((id) => client.readEmail(id)));
 
       for (const result of results) {
         if (result.status === "fulfilled" && result.value) {
@@ -560,7 +608,10 @@ class EmailSyncService {
       // whichever comes first. This gives the renderer progressive updates
       // without overwhelming it with tiny batches.
       const now = Date.now();
-      if (pendingEmit.length >= EMIT_BATCH_SIZE || (pendingEmit.length > 0 && now - lastEmitTime >= 2000)) {
+      if (
+        pendingEmit.length >= EMIT_BATCH_SIZE ||
+        (pendingEmit.length > 0 && now - lastEmitTime >= 2000)
+      ) {
         if (!options?.suppressNotification) {
           this.onNewEmails?.(accountId, pendingEmit);
         }
@@ -571,7 +622,10 @@ class EmailSyncService {
       }
 
       // Emit progress (always, even when suppressNotification is true)
-      this.onSyncProgress?.(accountId, { fetched: Math.min(i + 10, newIds.length), total: newIds.length });
+      this.onSyncProgress?.(accountId, {
+        fetched: Math.min(i + 10, newIds.length),
+        total: newIds.length,
+      });
 
       // Yield to the event loop between API batches so IPC handlers, UI
       // updates and other async work can run. Without this, fetching 500+
@@ -585,7 +639,7 @@ class EmailSyncService {
     }
 
     // Build the full newEmails array from all fetched emails
-    const newEmails: DashboardEmail[] = allFetchedEmails.map(email => ({
+    const newEmails: DashboardEmail[] = allFetchedEmails.map((email) => ({
       ...email,
       accountId,
       labelIds: email.labelIds,
@@ -601,8 +655,8 @@ class EmailSyncService {
     const effectiveSkipPrefetch = options?.skipPrefetch || options?.runTriage;
     if (options?.runTriage && newEmails.length > 0) {
       // Sort by date descending (newest first) to partition by position
-      const sorted = [...newEmails].sort((a, b) =>
-        new Date(b.date).getTime() - new Date(a.date).getTime()
+      const sorted = [...newEmails].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
       );
 
       // Top 500 newest get analyzed, the rest are skipped
@@ -610,17 +664,19 @@ class EmailSyncService {
       const overflow = sorted.slice(EmailSyncService.MAX_ANALYSIS_EMAILS);
 
       if (overflow.length > 0) {
-        const skipIds = overflow.map(e => e.id);
-        const analysisThreadIds = new Set(analysisWindow.map(e => e.threadId));
-        const skipThreadIds = [...new Set(overflow.map(e => e.threadId))].filter(tid => !analysisThreadIds.has(tid));
+        const skipIds = overflow.map((e) => e.id);
+        const analysisThreadIds = new Set(analysisWindow.map((e) => e.threadId));
+        const skipThreadIds = [...new Set(overflow.map((e) => e.threadId))].filter(
+          (tid) => !analysisThreadIds.has(tid),
+        );
         batchInsertOnboardingSkips(skipIds, skipThreadIds, accountId);
         log.info(
           `[Sync] First-time triage for ${accountId}: ` +
-          `${analysisWindow.length} to analyze, ${overflow.length} overflow skipped`
+            `${analysisWindow.length} to analyze, ${overflow.length} overflow skipped`,
         );
 
         // Update in-memory email objects with skip analysis for triaged emails
-        const skipIdSet = new Set(overflow.map(e => e.id));
+        const skipIdSet = new Set(overflow.map((e) => e.id));
         const skipAnalysis = {
           needsReply: false,
           reason: "Pre-existing email before app setup",
@@ -635,20 +691,27 @@ class EmailSyncService {
 
         // Emit the triaged updates so renderer reflects skip/archive-ready state
         if (!options?.suppressNotification) {
-          this.onNewEmails?.(accountId, overflow.map(e => {
-            const updated = newEmails.find(ne => ne.id === e.id);
-            return updated || e;
-          }));
+          this.onNewEmails?.(
+            accountId,
+            overflow.map((e) => {
+              const updated = newEmails.find((ne) => ne.id === e.id);
+              return updated || e;
+            }),
+          );
         }
       }
 
       // Queue analysis window for prefetch
       if (analysisWindow.length > 0) {
-        prefetchService.queueEmails(analysisWindow.map(e => e.id)).catch((err) => log.error({ err }, "Unhandled error"));
+        prefetchService
+          .queueEmails(analysisWindow.map((e) => e.id))
+          .catch((err) => log.error({ err }, "Unhandled error"));
       }
     } else if (!effectiveSkipPrefetch && newEmails.length > 0) {
       // Queue new emails for prefetching (analysis, sender profiles, drafts)
-      prefetchService.queueEmails(newEmails.map(e => e.id)).catch((err) => log.error({ err }, "Unhandled error"));
+      prefetchService
+        .queueEmails(newEmails.map((e) => e.id))
+        .catch((err) => log.error({ err }, "Unhandled error"));
     }
 
     // Backfill sent emails for inbox threads
@@ -702,11 +765,14 @@ class EmailSyncService {
     // Suppress onNewEmails notification during fullSync — we fire it after
     // triage so the renderer only sees already-triaged emails, avoiding a
     // flash of untriaged emails in the inbox.
-    const newEmails = await this.fullSync(accountId, { skipPrefetch: true, suppressNotification: true });
+    const newEmails = await this.fullSync(accountId, {
+      skipPrefetch: true,
+      suppressNotification: true,
+    });
 
     // Sort by date descending (newest first) to partition by position
-    const sorted = [...newEmails].sort((a, b) =>
-      new Date(b.date).getTime() - new Date(a.date).getTime()
+    const sorted = [...newEmails].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     );
 
     // Build cutoff at 3 months ago, clamped to the last day of the target
@@ -723,22 +789,24 @@ class EmailSyncService {
     const analysisWindow = sorted.slice(0, EmailSyncService.MAX_ANALYSIS_EMAILS);
     const overflow = sorted.slice(EmailSyncService.MAX_ANALYSIS_EMAILS);
 
-    const recentEmails = analysisWindow.filter(e => new Date(e.date).getTime() >= cutoffMs);
-    const oldInWindow = analysisWindow.filter(e => new Date(e.date).getTime() < cutoffMs);
+    const recentEmails = analysisWindow.filter((e) => new Date(e.date).getTime() >= cutoffMs);
+    const oldInWindow = analysisWindow.filter((e) => new Date(e.date).getTime() < cutoffMs);
 
     // Everything beyond 500 + old emails within the 500 → skip + archive-ready
     const toSkip = [...overflow, ...oldInWindow];
 
     if (toSkip.length > 0) {
-      const skipIds = toSkip.map(e => e.id);
+      const skipIds = toSkip.map((e) => e.id);
       // Don't mark threads as archive-ready if they also contain recent emails
-      const recentThreadIds = new Set(recentEmails.map(e => e.threadId));
-      const skipThreadIds = [...new Set(toSkip.map(e => e.threadId))].filter(tid => !recentThreadIds.has(tid));
+      const recentThreadIds = new Set(recentEmails.map((e) => e.threadId));
+      const skipThreadIds = [...new Set(toSkip.map((e) => e.threadId))].filter(
+        (tid) => !recentThreadIds.has(tid),
+      );
       batchInsertOnboardingSkips(skipIds, skipThreadIds, accountId);
       log.info(
         `[Sync] Onboarding triage for ${accountId}: ` +
-        `${recentEmails.length} to analyze, ${oldInWindow.length} old in window, ` +
-        `${overflow.length} overflow, ${toSkip.length} total skipped`
+          `${recentEmails.length} to analyze, ${oldInWindow.length} old in window, ` +
+          `${overflow.length} overflow, ${toSkip.length} total skipped`,
       );
     }
 
@@ -746,7 +814,7 @@ class EmailSyncService {
     // so the renderer receives them with correct priority, preventing them
     // from appearing as "unanalyzed" at the top of the inbox.
     if (toSkip.length > 0) {
-      const skipIdSet = new Set(toSkip.map(e => e.id));
+      const skipIdSet = new Set(toSkip.map((e) => e.id));
       const skipAnalysis = {
         needsReply: false,
         reason: "Pre-existing email before app setup",
@@ -769,8 +837,8 @@ class EmailSyncService {
       totalInboxCount,
       oldMarked: toSkip.length,
       recentCount: recentEmails.length,
-      oldEmailIds: toSkip.map(e => e.id),
-      recentEmailIds: recentEmails.map(e => e.id),
+      oldEmailIds: toSkip.map((e) => e.id),
+      recentEmailIds: recentEmails.map((e) => e.id),
     };
   }
 
@@ -826,7 +894,7 @@ class EmailSyncService {
     // This happens when a draft is sent: INBOX label removed (→ deleted) + SENT label added (→ new).
     // Processing both would delete the email then immediately re-add it, causing data loss.
     const newSet = new Set(changes.newMessageIds);
-    const filteredDeleted = changes.deletedMessageIds.filter(id => !newSet.has(id));
+    const filteredDeleted = changes.deletedMessageIds.filter((id) => !newSet.has(id));
 
     // Handle deleted/archived emails
     if (filteredDeleted.length > 0) {
@@ -879,17 +947,19 @@ class EmailSyncService {
         this.onNewEmails?.(accountId, newEmails);
 
         // Unsnooze any threads that received replies
-        const threadIds = [...new Set(newEmails.map(e => e.threadId))];
+        const threadIds = [...new Set(newEmails.map((e) => e.threadId))];
         snoozeService.unsnoozeForReplies(threadIds, accountId);
 
         // Queue new emails for prefetching (analysis, sender profiles, drafts)
-        prefetchService.queueEmails(newEmails.map(e => e.id)).catch((err) => log.error({ err }, "Unhandled error"));
+        prefetchService
+          .queueEmails(newEmails.map((e) => e.id))
+          .catch((err) => log.error({ err }, "Unhandled error"));
 
         // New received emails invalidate archive-ready status for their threads —
         // remove immediately so the thread goes back to the prioritized inbox.
-        const receivedEmails = newEmails.filter(e => !e.labelIds?.includes("SENT"));
+        const receivedEmails = newEmails.filter((e) => !e.labelIds?.includes("SENT"));
         if (receivedEmails.length > 0) {
-          const receivedThreadIds = [...new Set(receivedEmails.map(e => e.threadId))];
+          const receivedThreadIds = [...new Set(receivedEmails.map((e) => e.threadId))];
           this.clearArchiveReadyForThreads(receivedThreadIds, accountId);
           // Re-queue archive-ready analysis with the new email context
           prefetchService.requeueArchiveReadyForThreads(receivedThreadIds, accountId);
@@ -899,12 +969,12 @@ class EmailSyncService {
         // Skip threads with a pending delayed reanalysis from compose (the user
         // just replied through the app and the grace-period timer handles it).
         // Lazy import to avoid circular dependency (compose.ipc → sync.ipc → email-sync → compose.ipc).
-        const sentEmails = newEmails.filter(e => e.labelIds?.includes("SENT"));
+        const sentEmails = newEmails.filter((e) => e.labelIds?.includes("SENT"));
         if (sentEmails.length > 0) {
-          const sentThreadIds = [...new Set(sentEmails.map(e => e.threadId))];
+          const sentThreadIds = [...new Set(sentEmails.map((e) => e.threadId))];
           this.clearArchiveReadyForThreads(sentThreadIds, accountId);
           const { hasPendingReanalysis } = await import("../ipc/compose.ipc");
-          const threadIdsToRequeue = sentThreadIds.filter(tid => !hasPendingReanalysis(tid));
+          const threadIdsToRequeue = sentThreadIds.filter((tid) => !hasPendingReanalysis(tid));
           if (threadIdsToRequeue.length > 0) {
             prefetchService.requeueArchiveReadyForThreads(threadIdsToRequeue, accountId);
           }
@@ -921,16 +991,24 @@ class EmailSyncService {
         const removedDraftEmailIds: string[] = [];
         const threadsWithRemovedDrafts = new Set<string>();
         const processedThreads = new Set<string>();
-        const newEmailIds = new Set(newEmails.map(e => e.id));
+        const newEmailIds = new Set(newEmails.map((e) => e.id));
 
         // Pass 1: clean up stale drafts (one pass per thread, order doesn't matter)
         for (const email of newEmails) {
           if (processedThreads.has(email.threadId)) continue;
           processedThreads.add(email.threadId);
 
-          const hasSent = newEmails.some(e => e.threadId === email.threadId && e.labelIds?.includes("SENT"));
+          const hasSent = newEmails.some(
+            (e) => e.threadId === email.threadId && e.labelIds?.includes("SENT"),
+          );
           const reason = hasSent ? "user replied from another client" : "new reply in thread";
-          const removed = cleanupStaleDraftsForThread(email.threadId, accountId, newEmailIds, reason, hasSent);
+          const removed = cleanupStaleDraftsForThread(
+            email.threadId,
+            accountId,
+            newEmailIds,
+            reason,
+            hasSent,
+          );
 
           if (removed.length > 0) {
             removedDraftEmailIds.push(...removed);
@@ -950,11 +1028,13 @@ class EmailSyncService {
           if (!threadsWithRemovedDrafts.has(tid) && !threadsWithDeletedDrafts.has(tid)) continue;
           // Don't re-draft if the user also replied in this thread
           const userAlsoReplied = newEmails.some(
-            e => e.threadId === tid && e.labelIds?.includes("SENT"),
+            (e) => e.threadId === tid && e.labelIds?.includes("SENT"),
           );
           if (userAlsoReplied) continue;
 
-          log.info(`[Sync] Force-queueing agent draft for ${email.id} — thread ${tid} had a draft removed by new activity`);
+          log.info(
+            `[Sync] Force-queueing agent draft for ${email.id} — thread ${tid} had a draft removed by new activity`,
+          );
           prefetchService.forceQueueAgentDraft(email.id);
           forceQueuedThreads.add(tid);
         }
@@ -974,8 +1054,10 @@ class EmailSyncService {
         // Default to ["INBOX"] for legacy emails with no labels stored
         const currentLabels = email.labelIds || ["INBOX"];
         if (currentLabels.includes("UNREAD")) {
-          const newLabels = currentLabels.filter(l => l !== "UNREAD");
-          log.info(`[Sync] Marking ${messageId} as read: ${JSON.stringify(currentLabels)} → ${JSON.stringify(newLabels)}`);
+          const newLabels = currentLabels.filter((l) => l !== "UNREAD");
+          log.info(
+            `[Sync] Marking ${messageId} as read: ${JSON.stringify(currentLabels)} → ${JSON.stringify(newLabels)}`,
+          );
           updateEmailLabelIds(messageId, newLabels);
           labelUpdates.push({ emailId: messageId, labelIds: newLabels });
         }
@@ -989,7 +1071,9 @@ class EmailSyncService {
         const currentLabels = email.labelIds || ["INBOX"];
         if (!currentLabels.includes("UNREAD")) {
           const newLabels = [...currentLabels, "UNREAD"];
-          log.info(`[Sync] Marking ${messageId} as unread: ${JSON.stringify(currentLabels)} → ${JSON.stringify(newLabels)}`);
+          log.info(
+            `[Sync] Marking ${messageId} as unread: ${JSON.stringify(currentLabels)} → ${JSON.stringify(newLabels)}`,
+          );
           updateEmailLabelIds(messageId, newLabels);
           labelUpdates.push({ emailId: messageId, labelIds: newLabels });
         }
@@ -1054,23 +1138,27 @@ class EmailSyncService {
    */
   private clearArchiveReadyForThreads(threadIds: string[], accountId: string): void {
     // Check which threads actually had archive-ready status
-    const affectedThreadIds = threadIds.filter(tid => {
+    const affectedThreadIds = threadIds.filter((tid) => {
       const result = getArchiveReadyForThread(tid, accountId);
       return result?.isReady;
     });
 
     if (affectedThreadIds.length === 0) return;
 
-    log.info(`[Sync] Clearing archive-ready for ${affectedThreadIds.length} threads (new activity detected)`);
+    log.info(
+      `[Sync] Clearing archive-ready for ${affectedThreadIds.length} threads (new activity detected)`,
+    );
     deleteArchiveReadyForThreads(affectedThreadIds, accountId);
 
     // Notify renderer to remove from archive-ready set
     // Use lazy import to avoid circular dependency
-    import("../ipc/prefetch.ipc").then(({ notifyArchiveReady }) => {
-      for (const threadId of affectedThreadIds) {
-        notifyArchiveReady(threadId, accountId, false, "");
-      }
-    }).catch((err) => log.error({ err }, "Unhandled error"));
+    import("../ipc/prefetch.ipc")
+      .then(({ notifyArchiveReady }) => {
+        for (const threadId of affectedThreadIds) {
+          notifyArchiveReady(threadId, accountId, false, "");
+        }
+      })
+      .catch((err) => log.error({ err }, "Unhandled error"));
   }
 
   /**

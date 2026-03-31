@@ -96,7 +96,7 @@ export async function learnFromPriorityOverrideWithReason(params: {
   };
 
   // Check for duplicates against existing analysis memories
-  const existing = getMemories(accountId, "analysis").filter(m => m.enabled);
+  const existing = getMemories(accountId, "analysis").filter((m) => m.enabled);
   const result = await consolidateMemoryScopes(
     { content: memory.content, scope: memory.scope, scopeValue: memory.scopeValue },
     existing,
@@ -110,14 +110,18 @@ export async function learnFromPriorityOverrideWithReason(params: {
   } else if (result.action === "consolidate") {
     // consolidateMemoryScopes already persisted changes (deleted overlapping, possibly created global)
     if (result.createdGlobal) {
-      log.info(`[AnalysisEditLearner] Consolidated into global memory: ${result.createdGlobal.content}`);
+      log.info(
+        `[AnalysisEditLearner] Consolidated into global memory: ${result.createdGlobal.content}`,
+      );
       return { memory: result.createdGlobal, saved: true };
     }
     log.info(`[AnalysisEditLearner] Consolidated existing memories — not saving original`);
     return { memory, saved: false };
   } else {
     saveMemory(memory);
-    log.info(`[AnalysisEditLearner] Saved analysis memory with reason: [${scope.scope}${scope.scopeValue ? `:${scope.scopeValue}` : ""}] ${reason}`);
+    log.info(
+      `[AnalysisEditLearner] Saved analysis memory with reason: [${scope.scope}${scope.scopeValue ? `:${scope.scopeValue}` : ""}] ${reason}`,
+    );
     return { memory, saved: true };
   }
 }
@@ -131,7 +135,9 @@ export async function learnFromPriorityOverrideInferred(
 ): Promise<AnalysisLearnResult> {
   const { accountId, senderEmail, senderDomain, subject } = override;
 
-  log.info(`[AnalysisEditLearner] Inferring patterns from priority override: ${formatOverrideDescription(override)}`);
+  log.info(
+    `[AnalysisEditLearner] Inferring patterns from priority override: ${formatOverrideDescription(override)}`,
+  );
 
   // 1. Extract observations via Claude
   const observations = await analyzeOverride(override);
@@ -141,7 +147,7 @@ export async function learnFromPriorityOverrideInferred(
   }
 
   // 2. Filter against already-promoted analysis memories
-  const promotedMemories = getMemories(accountId, "analysis").filter(m => m.enabled);
+  const promotedMemories = getMemories(accountId, "analysis").filter((m) => m.enabled);
   const filteredObservations = await filterAgainstPromotedMemories(observations, promotedMemories);
   if (filteredObservations.length === 0) {
     log.info(`[AnalysisEditLearner] All observations already covered by promoted memories`);
@@ -156,7 +162,10 @@ export async function learnFromPriorityOverrideInferred(
   if (existingDraftMemories.length > 0) {
     matches = await matchAnalysisDraftMemories(filteredObservations, existingDraftMemories);
   } else {
-    matches = filteredObservations.map((_, i) => ({ observationIndex: i, matchedDraftMemoryId: null }));
+    matches = filteredObservations.map((_, i) => ({
+      observationIndex: i,
+      matchedDraftMemoryId: null,
+    }));
   }
 
   // 5. Process each observation
@@ -174,19 +183,29 @@ export async function learnFromPriorityOverrideInferred(
       const updated = incrementDraftMemoryVote(match.matchedDraftMemoryId, sourceEmailId);
       if (!updated) continue;
 
-      log.info(`[AnalysisEditLearner] Voted on draft memory ${match.matchedDraftMemoryId} (now ${updated.voteCount} votes): ${updated.content}`);
+      log.info(
+        `[AnalysisEditLearner] Voted on draft memory ${match.matchedDraftMemoryId} (now ${updated.voteCount} votes): ${updated.content}`,
+      );
 
       // Check for promotion (threshold = 2 for analysis)
       if (updated.voteCount >= PROMOTION_THRESHOLD) {
-        const currentPromoted = getMemories(accountId, "analysis").filter(m => m.enabled);
+        const currentPromoted = getMemories(accountId, "analysis").filter((m) => m.enabled);
         const result = await consolidateMemoryScopes(
-          { content: updated.content, scope: updated.scope, scopeValue: updated.scopeValue === null || updated.scope === "global" ? null : updated.scopeValue },
-          currentPromoted, accountId,
+          {
+            content: updated.content,
+            scope: updated.scope,
+            scopeValue:
+              updated.scopeValue === null || updated.scope === "global" ? null : updated.scopeValue,
+          },
+          currentPromoted,
+          accountId,
           { source: "priority-override", memoryType: "analysis" },
         );
 
         if (result.action === "duplicate") {
-          log.info(`[AnalysisEditLearner] Draft memory "${updated.content}" already covered — deleting`);
+          log.info(
+            `[AnalysisEditLearner] Draft memory "${updated.content}" already covered — deleting`,
+          );
           deleteDraftMemory(updated.id);
           continue;
         }
@@ -247,14 +266,18 @@ export async function learnFromPriorityOverrideInferred(
       };
       saveDraftMemory(dm);
       draftMemoriesCreated++;
-      log.info(`[AnalysisEditLearner] Created draft memory: [${dm.scope}${dm.scopeValue ? `:${dm.scopeValue}` : ""}] ${dm.content}`);
+      log.info(
+        `[AnalysisEditLearner] Created draft memory: [${dm.scope}${dm.scopeValue ? `:${dm.scopeValue}` : ""}] ${dm.content}`,
+      );
     }
   }
 
   // 6. Enforce cap
   evictOldestDraftMemories(accountId, MAX_DRAFT_MEMORIES, "analysis");
 
-  log.info(`[AnalysisEditLearner] Done: ${promoted.length} promoted, ${draftMemoriesCreated} draft memories`);
+  log.info(
+    `[AnalysisEditLearner] Done: ${promoted.length} promoted, ${draftMemoriesCreated} draft memories`,
+  );
   return { promoted, draftMemoriesCreated };
 }
 
@@ -269,12 +292,14 @@ async function analyzeOverride(override: AnalysisOverride): Promise<AnalysisObse
 
   const overrideDesc = formatOverrideDescription(override);
 
-  const response = await createMessage({
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 2048,
-    messages: [{
-      role: "user",
-      content: `You are analyzing why a user changed the priority classification of an email. Extract up to 3 generalizable rules about how this type of email should be prioritized in the future.
+  const response = await createMessage(
+    {
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 2048,
+      messages: [
+        {
+          role: "user",
+          content: `You are analyzing why a user changed the priority classification of an email. Extract up to 3 generalizable rules about how this type of email should be prioritized in the future.
 
 CONTEXT:
 - From: <sender_email>${override.senderEmail}</sender_email> (domain: <sender_domain>${override.senderDomain}</sender_domain>)
@@ -309,10 +334,17 @@ Content should be a clear directive for an email triage system, like:
 
 Return [] if the override seems purely situational with no generalizable pattern.
 Respond with ONLY the JSON array.`,
-    }],
-  }, { caller: "analysis-edit-learner-analyze", emailId: override.emailId, accountId: override.accountId });
+        },
+      ],
+    },
+    {
+      caller: "analysis-edit-learner-analyze",
+      emailId: override.emailId,
+      accountId: override.accountId,
+    },
+  );
 
-  const textBlock = response.content.find(b => b.type === "text");
+  const textBlock = response.content.find((b) => b.type === "text");
   const text = textBlock?.type === "text" ? textBlock.text : "";
 
   const parsed = parseJsonArray<{
@@ -325,11 +357,16 @@ Respond with ONLY the JSON array.`,
   if (!parsed || parsed.length === 0) return null;
 
   return parsed
-    .filter(item => item.content && typeof item.content === "string")
+    .filter((item) => item.content && typeof item.content === "string")
     .slice(0, 3)
-    .map(item => ({...item, content: item.content.slice(0, 500)}))
-    .map(item => {
-      const normalized = normalizeScope(item.scope, item.scopeValue, override.senderEmail, override.senderDomain);
+    .map((item) => ({ ...item, content: item.content.slice(0, 500) }))
+    .map((item) => {
+      const normalized = normalizeScope(
+        item.scope,
+        item.scopeValue,
+        override.senderEmail,
+        override.senderDomain,
+      );
       return {
         scope: normalized.scope,
         scopeValue: normalized.scopeValue,
@@ -351,12 +388,14 @@ async function matchAnalysisDraftMemories(
     return observations.map((_, i) => ({ observationIndex: i, matchedDraftMemoryId: null }));
   }
 
-  const response = await createMessage({
-    model: "claude-sonnet-4-5-20250929",
-    max_tokens: 1024,
-    messages: [{
-      role: "user",
-      content: `Match each new observation to an existing draft memory that describes the SAME underlying priority/classification preference, or mark it as new.
+  const response = await createMessage(
+    {
+      model: "claude-sonnet-4-5-20250929",
+      max_tokens: 1024,
+      messages: [
+        {
+          role: "user",
+          content: `Match each new observation to an existing draft memory that describes the SAME underlying priority/classification preference, or mark it as new.
 
 EXISTING DRAFT MEMORIES:
 ${draftMemories.map((dm, i) => `[${i}] id=${dm.id} [${dm.scope}${dm.scopeValue ? `:${dm.scopeValue}` : ""}] ${dm.content}`).join("\n")}
@@ -366,8 +405,11 @@ ${observations.map((o, i) => `[${i}] [${o.scope}${o.scopeValue ? `:${o.scopeValu
 
 For each observation, return the id of the matching draft memory, or null if new.
 Respond with ONLY a JSON array: [{"observationIndex": 0, "matchedDraftMemoryId": "..." or null}, ...]`,
-    }],
-  }, { caller: "analysis-edit-learner-match" });
+        },
+      ],
+    },
+    { caller: "analysis-edit-learner-match" },
+  );
 
   const text = response.content[0]?.type === "text" ? response.content[0].text : "";
   const parsed = parseJsonArray<{
@@ -379,12 +421,13 @@ Respond with ONLY a JSON array: [{"observationIndex": 0, "matchedDraftMemoryId":
     return observations.map((_, i) => ({ observationIndex: i, matchedDraftMemoryId: null }));
   }
 
-  const validIds = new Set(draftMemories.map(dm => dm.id));
-  return parsed.map(item => ({
+  const validIds = new Set(draftMemories.map((dm) => dm.id));
+  return parsed.map((item) => ({
     observationIndex: item.observationIndex,
-    matchedDraftMemoryId: item.matchedDraftMemoryId && validIds.has(item.matchedDraftMemoryId)
-      ? item.matchedDraftMemoryId
-      : null,
+    matchedDraftMemoryId:
+      item.matchedDraftMemoryId && validIds.has(item.matchedDraftMemoryId)
+        ? item.matchedDraftMemoryId
+        : null,
   }));
 }
 
@@ -401,12 +444,14 @@ async function classifyScope(
     return { scope: "person", scopeValue: senderEmail.toLowerCase() };
   }
 
-  const response = await createMessage({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 256,
-    messages: [{
-      role: "user",
-      content: `Classify the scope of this email priority preference.
+  const response = await createMessage(
+    {
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 256,
+      messages: [
+        {
+          role: "user",
+          content: `Classify the scope of this email priority preference.
 
 Preference: "${reason}"
 Sender: ${senderEmail} (domain: ${senderDomain})
@@ -422,8 +467,11 @@ For person: scopeValue = "${senderEmail.toLowerCase()}"
 For domain: scopeValue = "${senderDomain.toLowerCase()}"
 For category: scopeValue = "category-name"
 For global: scopeValue = null`,
-    }],
-  }, { caller: "analysis-edit-learner-classify-scope" });
+        },
+      ],
+    },
+    { caller: "analysis-edit-learner-classify-scope" },
+  );
 
   const text = response.content[0]?.type === "text" ? response.content[0].text : "";
   try {
@@ -434,7 +482,12 @@ For global: scopeValue = null`,
       scope: string;
       scopeValue: string | null;
     };
-    return normalizeScope(parsed.scope, parsed.scopeValue, senderEmail.toLowerCase(), senderDomain.toLowerCase());
+    return normalizeScope(
+      parsed.scope,
+      parsed.scopeValue,
+      senderEmail.toLowerCase(),
+      senderDomain.toLowerCase(),
+    );
   } catch {
     // Default to person scope
     return { scope: "person", scopeValue: senderEmail.toLowerCase() };

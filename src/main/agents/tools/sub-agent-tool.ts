@@ -57,8 +57,19 @@ export interface SubAgentToolResult {
  * events with nestedRunId are rendered inside the ToolCallEvent card rather
  * than in the main timeline.
  */
-export function createSubAgentTool(deps: SubAgentToolDeps): ToolDefinition<{ query: string; conversation_id?: string }, SubAgentToolResult> {
-  const { provider, toolConfig, emitToRenderer, netFetch, signal, taskId, context, parentProviderId } = deps;
+export function createSubAgentTool(
+  deps: SubAgentToolDeps,
+): ToolDefinition<{ query: string; conversation_id?: string }, SubAgentToolResult> {
+  const {
+    provider,
+    toolConfig,
+    emitToRenderer,
+    netFetch,
+    signal,
+    taskId,
+    context,
+    parentProviderId,
+  } = deps;
 
   // Track conversation ID across multiple calls within the same run
   // so follow-up queries reuse the same conversation automatically
@@ -88,13 +99,14 @@ export function createSubAgentTool(deps: SubAgentToolDeps): ToolDefinition<{ que
         prompt: input.query,
         context: subContext,
         tools: [],
-        toolExecutor: async () => { throw new Error("Sub-agent tools do not support nested tool execution"); },
+        toolExecutor: async () => {
+          throw new Error("Sub-agent tools do not support nested tool execution");
+        },
         netFetch,
         signal,
       });
 
       const textParts: string[] = [];
-      let resultConversationId: string | undefined;
       let eventCount = 0;
 
       log.info(`[SubAgentTool] Starting ${toolConfig.name} run (nestedRunId=${nestedRunId})`);
@@ -132,17 +144,23 @@ export function createSubAgentTool(deps: SubAgentToolDeps): ToolDefinition<{ que
         // Calling gen.return() on a finished generator is a no-op per spec,
         // but skipping it entirely makes the intent clearer.
         if (!completed) {
-          try { await gen.return({ state: "cancelled" }); } catch { /* ignore secondary errors */ }
+          try {
+            await gen.return({ state: "cancelled" });
+          } catch {
+            /* ignore secondary errors */
+          }
         }
       }
 
       // Extract conversation ID from the run result for follow-ups
-      resultConversationId = runResult.providerTaskId;
+      const resultConversationId = runResult.providerTaskId;
       if (resultConversationId) {
         lastConversationId = resultConversationId;
       }
 
-      log.info(`[SubAgentTool] ${toolConfig.name} completed: ${eventCount} events, state=${runResult.state}, text=${textParts.join("").length} chars`);
+      log.info(
+        `[SubAgentTool] ${toolConfig.name} completed: ${eventCount} events, state=${runResult.state}, text=${textParts.join("").length} chars`,
+      );
 
       // Emit final state for the nested run
       emitToRenderer(taskId, {
