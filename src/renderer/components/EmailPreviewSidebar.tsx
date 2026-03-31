@@ -208,24 +208,17 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
   // Only reacts to key changes — NOT sidebarTab — so the user can freely
   // switch tabs via "b" key.
   const prevEmailKeyRef = useRef<string | null>(null);
-  const agentTaskStatus = useAppStore((s) => {
-    if (!agentTaskKey) return null;
-    return s.agentTasks[agentTaskKey]?.status ?? null;
-  });
   useEffect(() => {
     const key = agentTaskKey ?? null;
     if (!key || key === prevEmailKeyRef.current) return;
     prevEmailKeyRef.current = key;
-    // Don't auto-switch to agent tab for failed tasks — they're accessible
-    // manually but shouldn't intrude on every email navigation.
-    const isFailed = agentTaskStatus === "failed";
-    if ((hasAgentTask && !isFailed) || hasPersistedTrace) {
+    if (hasAgentTask || hasPersistedTrace) {
       setSidebarTab("agent");
     } else if (useAppStore.getState().sidebarTab === "agent") {
       // Only reset away from agent tab — preserve user's manual choice of other tabs
       setSidebarTab(availableTabs.includes("sender") ? "sender" : availableTabs[0]);
     }
-  }, [agentTaskKey, hasAgentTask, hasPersistedTrace, agentTaskStatus, setSidebarTab, availableTabs]);
+  }, [agentTaskKey, hasAgentTask, hasPersistedTrace, setSidebarTab, availableTabs]);
 
   // Load persisted agent trace from DB when the selected email has a draft
   // with an agentTaskId but no in-memory agent task (e.g. after app restart).
@@ -295,7 +288,7 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
 
   // No email selected — show agent panel if a draft or global task is active, otherwise empty state
   if (!selectedEmail || !latestEmail) {
-    if (agentTaskKey && hasAgentTask && agentTaskStatus !== "failed") {
+    if (agentTaskKey && hasAgentTask) {
       return (
         <div className="w-80 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden">
           <AgentTabContent emailId={agentTaskKey} />
