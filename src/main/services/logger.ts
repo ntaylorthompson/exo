@@ -172,7 +172,9 @@ export function closeLogs(): void {
     }
     // Calling end() deregisters pino's on-exit-leak-free handler,
     // preventing the "sonic boom is not ready yet" crash.
-    _logger.end();
+    // pino.Logger inherits from EventEmitter which has end(), but the
+    // pino type definitions don't expose it — cast through the stream interface.
+    (_logger as unknown as { end(): void }).end();
     _logger = null;
   }
 }
