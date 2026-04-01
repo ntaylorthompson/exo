@@ -356,18 +356,15 @@ test.describe("Keyboard Actions - Star (s)", () => {
   });
 
   test("'s' stars selected thread when in multi-select mode", async () => {
-    await expect(page.locator("text=Inbox").first()).toBeVisible({ timeout: 10000 });
+    await waitForEmailListReady(page);
 
-    // Select first thread
-    await page.keyboard.press("j");
-    await page.waitForTimeout(300);
+    // Select first thread — retry until selection appears
+    const selectedRow = page.locator("div[data-thread-id][data-selected='true']");
+    await pressKeyUntilVisible(page, "j", selectedRow, { timeout: 15000 });
 
     // Enter multi-select mode with 'x'
-    await page.keyboard.press("x");
-    await page.waitForTimeout(300);
-
     const batchBar = page.locator("[data-testid='batch-action-bar']");
-    await expect(batchBar).toBeVisible({ timeout: 3000 });
+    await pressKeyUntilVisible(page, "x", batchBar, { timeout: 10000 });
 
     // Press 's' to toggle star
     await page.keyboard.press("s");

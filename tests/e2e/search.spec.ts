@@ -113,12 +113,13 @@ test.describe("Search - Query Input", () => {
     // Open search
     const searchButton = page.locator("button[title*='Search']").first();
     await searchButton.click();
-    await page.waitForTimeout(300);
 
-    // The input should be focused - we can test this by typing
-    await page.keyboard.type("test query");
-
+    // Wait for search input to be visible and focused before typing
     const searchInput = page.locator("input[placeholder*='Search']");
+    await expect(searchInput).toBeVisible({ timeout: 5000 });
+    await expect(searchInput).toBeFocused({ timeout: 5000 });
+
+    await page.keyboard.type("test query");
     const value = await searchInput.inputValue();
     expect(value).toBe("test query");
 
