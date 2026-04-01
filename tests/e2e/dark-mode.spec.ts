@@ -1,5 +1,5 @@
 import { test, expect, Page, ElectronApplication } from "@playwright/test";
-import { launchElectronApp } from "./launch-helpers";
+import { launchElectronApp, closeApp } from "./launch-helpers";
 
 let electronApp: ElectronApplication;
 let page: Page;
@@ -22,10 +22,7 @@ test.describe("Dark Mode", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 

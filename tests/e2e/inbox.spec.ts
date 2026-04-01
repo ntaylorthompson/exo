@@ -1,5 +1,5 @@
 import { test, expect, Page, ElectronApplication } from "@playwright/test";
-import { launchElectronApp } from "./launch-helpers";
+import { launchElectronApp, closeApp } from "./launch-helpers";
 
 /**
  * E2E Tests for Exo
@@ -28,10 +28,7 @@ test.describe("Exo E2E - Inbox View", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -110,10 +107,7 @@ test.describe("Exo E2E - Email Detail", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -184,10 +178,7 @@ test.describe("Exo E2E - Draft Generation", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -253,10 +244,7 @@ test.describe("Exo E2E - Navigation", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -351,10 +339,7 @@ test.describe("Exo E2E - Draft Critique", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -409,10 +394,7 @@ test.describe("Exo E2E - EA Settings", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -480,10 +462,7 @@ test.describe("Exo E2E - CC Display", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 

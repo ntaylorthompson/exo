@@ -1,5 +1,5 @@
 import { test, expect, Page, ElectronApplication } from "@playwright/test";
-import { launchElectronApp } from "./launch-helpers";
+import { launchElectronApp, closeApp } from "./launch-helpers";
 
 /**
  * E2E Tests for Reply and Forward workflows.
@@ -85,10 +85,7 @@ test.describe("Reply and Forward Workflows", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -350,10 +347,7 @@ test.describe("Reply After Forward - Bug Regression", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -503,10 +497,7 @@ test.describe("Keyboard Shortcuts for Reply/Forward", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -601,10 +592,7 @@ test.describe("Send via Cmd+Enter", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -647,10 +635,7 @@ test.describe("Cmd+Enter does not insert newline before sending", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 

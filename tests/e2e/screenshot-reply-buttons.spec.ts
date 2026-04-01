@@ -1,5 +1,5 @@
 import { test, expect, Page, ElectronApplication } from "@playwright/test";
-import { launchElectronApp, takeScreenshot } from "./launch-helpers";
+import { launchElectronApp, takeScreenshot, closeApp } from "./launch-helpers";
 
 test.describe("Thread Reply Buttons Screenshot", () => {
   let electronApp: ElectronApplication;
@@ -18,10 +18,7 @@ test.describe("Thread Reply Buttons Screenshot", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 

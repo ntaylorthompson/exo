@@ -1,5 +1,5 @@
 import { test, expect, Page, ElectronApplication } from "@playwright/test";
-import { launchElectronApp } from "./launch-helpers";
+import { launchElectronApp, closeApp } from "./launch-helpers";
 
 /**
  * E2E Tests for draft persistence across navigation.
@@ -80,10 +80,7 @@ test.describe("Draft persistence across navigation", () => {
     if (electronApp) {
       // Race close against a timeout — on CI, pending timers in the renderer
       // can prevent clean shutdown, causing afterAll to exceed 60s.
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 

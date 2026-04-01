@@ -1,5 +1,10 @@
 import { test, expect, Page, ElectronApplication } from "@playwright/test";
-import { launchElectronApp, waitForEmailListReady, pressKeyUntilVisible } from "./launch-helpers";
+import {
+  launchElectronApp,
+  waitForEmailListReady,
+  pressKeyUntilVisible,
+  closeApp,
+} from "./launch-helpers";
 
 /**
  * E2E Tests for complete keyboard-driven workflows.
@@ -40,10 +45,7 @@ test.describe("Keyboard Navigation - j/k Movement", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -140,10 +142,7 @@ test.describe("Keyboard Navigation - Enter and Escape", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -197,10 +196,7 @@ test.describe("Keyboard Compose - Reply, Reply-All, Forward", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -288,10 +284,7 @@ test.describe("Keyboard Actions - Archive (e)", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -340,10 +333,7 @@ test.describe("Keyboard Actions - Star (s)", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -380,10 +370,7 @@ test.describe("Keyboard Go-To - g i (Go to Inbox)", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -461,10 +448,7 @@ test.describe("Keyboard - Command Palette and Search", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -551,10 +535,7 @@ test.describe("Keyboard - Compose New Email (c)", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -623,10 +604,7 @@ test.describe("Keyboard - Escape Closes All Modals", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -721,10 +699,7 @@ test.describe("Keyboard - Agent Palette (Cmd+J)", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 

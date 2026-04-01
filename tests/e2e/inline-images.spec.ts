@@ -2,7 +2,7 @@ import { test, expect, Page, ElectronApplication } from "@playwright/test";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { launchElectronApp, takeScreenshot } from "./launch-helpers";
+import { launchElectronApp, takeScreenshot, closeApp } from "./launch-helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -37,10 +37,7 @@ test.describe("Inline Images - Reading", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -151,10 +148,7 @@ test.describe("Inline Images - Composing", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 

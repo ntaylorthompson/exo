@@ -95,6 +95,25 @@ export async function pressKeyUntilVisible(
 }
 
 /**
+ * Gracefully close an Electron app with a timeout fallback.
+ * Races electronApp.close() against a 10s timer, then SIGKILL the process
+ * to prevent Playwright's worker teardown timeout (60s) from triggering.
+ */
+export async function closeApp(electronApp: ElectronApplication): Promise<void> {
+  const pid = electronApp.process().pid;
+  await Promise.race([
+    electronApp.close(),
+    new Promise<void>((resolve) => setTimeout(resolve, 10000)),
+  ]);
+  // Ensure the process is fully dead — close() may have timed out
+  try {
+    if (pid) process.kill(pid, "SIGKILL");
+  } catch {
+    /* already exited */
+  }
+}
+
+/**
  * Best-effort screenshot capture, disabled by default.
  * Set E2E_SCREENSHOTS=true to enable (useful for debugging test failures).
  *

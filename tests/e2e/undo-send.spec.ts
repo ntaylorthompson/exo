@@ -1,7 +1,11 @@
 import { test, expect, Page, ElectronApplication } from "@playwright/test";
 import path from "path";
 import { existsSync, unlinkSync, readdirSync } from "fs";
-import { launchElectronApp as _launchElectronApp, takeScreenshot } from "./launch-helpers";
+import {
+  launchElectronApp as _launchElectronApp,
+  takeScreenshot,
+  closeApp,
+} from "./launch-helpers";
 
 /**
  * E2E Tests for Undo Send feature
@@ -95,10 +99,7 @@ test.describe("Undo Send - Inline Reply", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -187,10 +188,7 @@ test.describe("Undo Send - Inline Reply Undo Action", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -267,10 +265,7 @@ test.describe("Undo Send - New Email Compose", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -406,10 +401,7 @@ test.describe("Undo Send - Forward", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
@@ -489,10 +481,7 @@ test.describe("Undo Send - Settings Configuration", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await Promise.race([
-        electronApp.close(),
-        new Promise((resolve) => setTimeout(resolve, 10000)),
-      ]);
+      await closeApp(electronApp);
     }
   });
 
