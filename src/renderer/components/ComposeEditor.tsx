@@ -646,7 +646,12 @@ export function ComposeEditor({
           if (!editor) return;
           const resolved = resolveSnippetVariables(snippet.body, recipientEmail, senderName);
           const sanitized = DOMPurify.sanitize(resolved);
-          editor.chain().focus().insertContent(sanitized).run();
+          // Plain-text snippets (from textarea) use \n for line breaks, but TipTap
+          // parses insertContent as HTML where \n is insignificant whitespace.
+          // Convert \n to <br> for plain-text bodies so line breaks are preserved.
+          const hasHtml = /<[a-z][\s\S]*>/i.test(sanitized);
+          const content = hasHtml ? sanitized : sanitized.replace(/\n/g, "<br>");
+          editor.chain().focus().insertContent(content).run();
         }}
       />
       <div className="dark:text-gray-100">
