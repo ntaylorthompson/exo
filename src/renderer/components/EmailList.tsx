@@ -428,6 +428,14 @@ export function EmailList() {
     virtualizer.scrollToIndex(idx, { align: "auto" });
   }, [selectedThreadId]);
 
+  // Drafts view is non-virtualized, so the virtualizer scroll-to above is a no-op.
+  // Use native scrollIntoView for j/k navigation of AI-draft threads.
+  useEffect(() => {
+    if (!isDraftsView || !selectedThreadId) return;
+    const el = listRef.current?.querySelector(`[data-thread-id="${selectedThreadId}"]`);
+    el?.scrollIntoView({ block: "nearest" });
+  }, [selectedThreadId, isDraftsView]);
+
   const cycleDensity = () => {
     const currentIndex = densityOrder.indexOf(inboxDensity);
     const nextIndex = (currentIndex + 1) % densityOrder.length;
@@ -652,16 +660,17 @@ export function EmailList() {
               />
             ))}
             {threadsWithDrafts.map((thread) => (
-              <EmailRow
-                key={thread.threadId}
-                thread={thread}
-                isSelected={selectedThreadId === thread.threadId}
-                isChecked={selectedThreadIds.has(thread.threadId)}
-                isMultiSelectActive={selectedThreadIds.size > 0}
-                density={inboxDensity}
-                onClick={(e) => handleThreadClick(thread, e)}
-                onCheckboxChange={() => toggleThreadSelected(thread.threadId)}
-              />
+              <div key={thread.threadId} data-thread-id={thread.threadId}>
+                <EmailRow
+                  thread={thread}
+                  isSelected={selectedThreadId === thread.threadId}
+                  isChecked={selectedThreadIds.has(thread.threadId)}
+                  isMultiSelectActive={selectedThreadIds.size > 0}
+                  density={inboxDensity}
+                  onClick={(e) => handleThreadClick(thread, e)}
+                  onCheckboxChange={() => toggleThreadSelected(thread.threadId)}
+                />
+              </div>
             ))}
           </>
         ) : items.length > 0 ? (
