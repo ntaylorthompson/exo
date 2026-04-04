@@ -365,6 +365,11 @@ export class ExtensionHost {
     );
 
     for (const provider of sortedProviders) {
+      // Yield between providers so sync DB cache checks don't pile up
+      // and starve the event loop when multiple enrichEmail calls resolve
+      // near-simultaneously from a Promise.all batch.
+      await new Promise((resolve) => setImmediate(resolve));
+
       // Get extension ID from the enrichment data (more reliable than parsing provider.id)
       const extensionId = this.getExtensionIdForProvider(provider);
 
