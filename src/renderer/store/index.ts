@@ -372,6 +372,11 @@ interface AppState {
   openCommandPalette: () => void;
   closeCommandPalette: () => void;
 
+  // Find-in-page
+  isFindBarOpen: boolean;
+  openFindBar: () => void;
+  closeFindBar: () => void;
+
   // Search actions
   openSearch: () => void;
   closeSearch: () => void;
@@ -566,6 +571,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Command palette state
   isCommandPaletteOpen: false,
+
+  // Find-in-page state
+  isFindBarOpen: false,
 
   // Search state
   isSearchOpen: false,
@@ -893,6 +901,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Command palette actions
   openCommandPalette: () => set({ isCommandPaletteOpen: true }),
   closeCommandPalette: () => set({ isCommandPaletteOpen: false }),
+
+  // Find-in-page actions
+  openFindBar: () => set({ isFindBarOpen: true }),
+  closeFindBar: () => set({ isFindBarOpen: false }),
 
   // Search actions
   openSearch: () => set({ isSearchOpen: true }),
