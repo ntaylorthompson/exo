@@ -106,16 +106,40 @@ if (app.isPackaged && process.platform === "darwin") {
     /* /etc/paths.d may not exist */
   }
 
-  // Probe common user-local tool directories (nvm, cargo, etc.)
+  // Probe common user-local tool directories (nvm, cargo, homebrew, etc.)
   const home = process.env.HOME;
   if (home) {
+    // nvm: resolve the default version's bin directory from the alias file
+    try {
+      const nvmDefault = readFileSync(
+        join(home, ".nvm", "alias", "default"),
+        "utf8",
+      ).trim();
+      if (nvmDefault) {
+        // nvm aliases can be partial (e.g. "22") or full (e.g. "22.22.2").
+        // Find the best matching installed version.
+        const versionsDir = join(home, ".nvm", "versions", "node");
+        const installed = readdirSync(versionsDir);
+        const match = installed
+          .filter((v) => v.startsWith(`v${nvmDefault}`))
+          .sort()
+          .pop();
+        if (match) {
+          const nvmBin = join(versionsDir, match, "bin");
+          if (existsSync(nvmBin)) pathDirs.push(nvmBin);
+        }
+      }
+    } catch {
+      /* nvm not installed or no default alias */
+    }
+
     const userDirs = [
-      `${home}/.nvm/current/bin`,
       `${home}/.cargo/bin`,
       `${home}/.local/bin`,
+      "/opt/homebrew/bin", // fallback if /etc/paths.d/homebrew is missing
     ];
     for (const dir of userDirs) {
-      if (existsSync(dir)) pathDirs.push(dir);
+      if (existsSync(dir) && !pathDirs.includes(dir)) pathDirs.push(dir);
     }
   }
 
@@ -126,7 +150,8 @@ if (app.isPackaged && process.platform === "darwin") {
     const configPath = join(getDataDir(), "exo-config.json");
     if (existsSync(configPath)) {
       const raw = JSON.parse(readFileSync(configPath, "utf8"));
-      const extras: unknown[] = raw?.config?.extraPathDirs ?? [];
+      const rawExtras = raw?.config?.extraPathDirs;
+      const extras: unknown[] = Array.isArray(rawExtras) ? rawExtras : [];
       for (const dir of extras) {
         if (typeof dir === "string" && dir && existsSync(dir)) {
           pathDirs.push(dir);
