@@ -585,12 +585,17 @@ export class AgentCoordinator {
         this.handleNetFetchRequest(msg.requestId, msg.url, msg.options);
         break;
       case "confirmation_request":
-        this.sendToRenderer("agent:confirmation", {
-          toolCallId: msg.toolCallId,
-          toolName: msg.toolName,
-          input: msg.input,
-          description: msg.description,
-        });
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+          this.sendToRenderer("agent:confirmation", {
+            toolCallId: msg.toolCallId,
+            toolName: msg.toolName,
+            input: msg.input,
+            description: msg.description,
+          });
+        } else {
+          // Window is gone — auto-decline so the agent task doesn't hang indefinitely
+          this.resolveConfirmation(msg.toolCallId, false);
+        }
         break;
       case "providers_list":
         this.sendToRenderer("agent:providers", {

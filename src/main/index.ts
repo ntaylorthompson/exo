@@ -223,7 +223,8 @@ function handleMailtoUrl(url: string): void {
     pendingMailtoUrl = url;
     // On macOS the app can be running with no windows; create one so the URL gets consumed
     if (app.isReady()) {
-      createWindow();
+      const newWindow = createWindow();
+      agentCoordinator.setMainWindow(newWindow);
     }
     return;
   }
