@@ -356,12 +356,11 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     // draft reply per thread is all that's needed.
     const autoDraft = config.autoDraft;
     const isTestMode = process.env.EXO_TEST_MODE === "true";
-    const isDemoMode = process.env.EXO_DEMO_MODE === "true";
-    const skipAgentDrafts = autoDraft?.enabled === false || isTestMode || isDemoMode;
+    const skipAgentDrafts = autoDraft?.enabled === false || isTestMode;
     if (skipAgentDrafts) {
       if (autoDraft?.enabled === false)
         log.info("[Prefetch] Auto-drafting disabled in config — skipping agent drafts");
-      if (isTestMode || isDemoMode) log.info("[Prefetch] Test/demo mode — skipping agent drafts");
+      if (isTestMode) log.info("[Prefetch] Test mode — skipping agent drafts");
     }
     const allowedPriorities = autoDraft?.priorities ?? ["high", "medium", "low"];
     const candidateEmails = skipAgentDrafts
@@ -835,11 +834,9 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
         const autoDraftAllowed = autoDraftConfig?.enabled !== false;
         const autoDraftPriorities = autoDraftConfig?.priorities ?? ["high", "medium", "low"];
         const isTest = process.env.EXO_TEST_MODE === "true";
-        const isDemo = process.env.EXO_DEMO_MODE === "true";
         if (
           autoDraftAllowed &&
           !isTest &&
-          !isDemo &&
           result.priority !== "skip" &&
           autoDraftPriorities.includes(result.priority || "low") &&
           !this.processedDrafts.has(emailId) &&
@@ -1059,10 +1056,9 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
   private async processAgentDraft(emailId: string): Promise<void> {
     if (this.processedDrafts.has(emailId)) return;
 
-    // Skip in test/demo mode — agent worker may not be available or we shouldn't make real API calls
+    // Skip in test mode — agent worker may not be available
     const isTestMode = process.env.EXO_TEST_MODE === "true";
-    const isDemoMode = process.env.EXO_DEMO_MODE === "true";
-    if (isTestMode || isDemoMode) {
+    if (isTestMode) {
       this.processedDrafts.add(emailId);
       this.markAgentDraftDone(emailId, "completed");
       return;
@@ -1420,8 +1416,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     if (this.agentDraftBacklog.some((t) => t.emailId === emailId)) return;
 
     const isTest = process.env.EXO_TEST_MODE === "true";
-    const isDemo = process.env.EXO_DEMO_MODE === "true";
-    if (isTest || isDemo) return;
+    if (isTest) return;
 
     // Clear and re-set thread tracking only when we actually queue
     const email = getEmail(emailId);

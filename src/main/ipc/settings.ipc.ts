@@ -709,14 +709,13 @@ export function registerSettingsIpc(): void {
       { from, email: emailAddr }: { from: string; email: string },
     ): Promise<IpcResponse<SenderProfile | null>> => {
       const isTestMode = process.env.EXO_TEST_MODE === "true";
-      const isDemoMode = process.env.EXO_DEMO_MODE === "true";
 
-      if (isTestMode || isDemoMode) {
-        // Return mock data in demo mode
+      if (isTestMode) {
+        // Return mock data in test mode
         const mockProfile: SenderProfile = {
           email: emailAddr,
-          name: from.split("<")[0].trim() || "Demo Sender",
-          summary: "Demo sender profile - web search disabled in demo mode.",
+          name: from.split("<")[0].trim() || "Test Sender",
+          summary: "Test sender profile - web search disabled in test mode.",
           lookupAt: Date.now(),
         };
         return { success: true, data: mockProfile };
