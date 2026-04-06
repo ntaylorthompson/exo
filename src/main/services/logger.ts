@@ -14,6 +14,35 @@ import { type SonicBoom } from "sonic-boom";
 import { join } from "path";
 import { mkdirSync, readdirSync, unlinkSync, statSync } from "fs";
 import { tmpdir } from "os";
+import { Writable } from "stream";
+
+/**
+ * Wraps a SonicBoom destination so that writes to a destroyed stream are
+ * silently dropped instead of throwing "SonicBoom destroyed". This prevents
+ * logger errors from propagating up through IPC handlers during shutdown
+ * race conditions (see GitHub issue #67).
+ */
+function safeSonicBoomWrapper(dest: SonicBoom): Writable {
+  return new Writable({
+    write(chunk, _encoding, callback) {
+      try {
+        if (dest.destroyed) {
+          callback();
+          return;
+        }
+        dest.write(chunk);
+        callback();
+      } catch {
+        // Swallow write errors (e.g. "SonicBoom destroyed") — logging
+        // should never crash the app.
+        callback();
+      }
+    },
+    final(callback) {
+      callback();
+    },
+  });
+}
 
 // Lazy-require Electron modules so this file can be imported in tests
 // without Electron being available.
@@ -91,9 +120,10 @@ function initLogger(): Logger {
   const streams: pino.StreamEntry[] = [
     // Async writes — closeLogs() ends the SonicBoom destinations in before-quit,
     // deregistering pino's exit hook to prevent "sonic boom is not ready yet" crash.
+    // Wrapped in safeSonicBoomWrapper so writes after destroy are silently dropped.
     {
       level: "debug" as const,
-      stream: fileDest,
+      stream: safeSonicBoomWrapper(fileDest),
     },
   ];
 
@@ -112,7 +142,7 @@ function initLogger(): Logger {
       _destinations.push(stdoutDest);
       streams.push({
         level: "debug" as const,
-        stream: stdoutDest, // fd 1 = stdout
+        stream: safeSonicBoomWrapper(stdoutDest),
       });
     }
   }
