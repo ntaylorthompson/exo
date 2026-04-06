@@ -104,9 +104,7 @@ if (app.isPackaged && process.platform === "darwin") {
   try {
     for (const file of readdirSync("/etc/paths.d")) {
       try {
-        const lines = readFileSync(`/etc/paths.d/${file}`, "utf8")
-          .trim()
-          .split("\n");
+        const lines = readFileSync(`/etc/paths.d/${file}`, "utf8").trim().split("\n");
         pathDirs.push(...lines.filter(Boolean));
       } catch {
         /* skip unreadable files */
@@ -121,10 +119,7 @@ if (app.isPackaged && process.platform === "darwin") {
   if (home) {
     // nvm: resolve the default version's bin directory from the alias file
     try {
-      const nvmDefault = readFileSync(
-        join(home, ".nvm", "alias", "default"),
-        "utf8",
-      ).trim();
+      const nvmDefault = readFileSync(join(home, ".nvm", "alias", "default"), "utf8").trim();
       if (nvmDefault) {
         // nvm aliases can be partial (e.g. "22") or full (e.g. "22.22.2").
         // Find the best matching installed version.

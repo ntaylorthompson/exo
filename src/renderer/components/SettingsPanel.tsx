@@ -2980,8 +2980,8 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                   Additional Tool Directories
                 </h4>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  Extra directories to add to the system PATH so agents can find CLI tools
-                  installed in non-standard locations.
+                  Extra directories to add to the system PATH so agents can find CLI tools installed
+                  in non-standard locations.
                 </p>
               </div>
 
