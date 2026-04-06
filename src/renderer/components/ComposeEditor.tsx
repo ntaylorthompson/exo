@@ -200,24 +200,9 @@ function resolveSnippetVariables(
     resolved = resolved.replace(/\{first_name\}/gi, () => escaped);
   }
 
-  // Find remaining custom placeholders and prompt for them
-  const customVarRegex = /\{(\w+)\}/g;
-  let match;
-  const prompted = new Map<string, string>();
-  while ((match = customVarRegex.exec(resolved)) !== null) {
-    const varName = match[1];
-    // Skip system variables that weren't resolved (missing context)
-    if (SYSTEM_VARS.has(varName.toLowerCase())) continue;
-    // Use lowercase key to match the case-insensitive replacement below
-    if (!prompted.has(varName.toLowerCase())) {
-      const value = window.prompt(`Fill in {${varName}}:`, "") ?? "";
-      prompted.set(varName.toLowerCase(), escapeHtml(value));
-    }
-  }
-
-  for (const [varName, value] of prompted) {
-    resolved = resolved.replace(new RegExp(`\\{${varName}\\}`, "gi"), () => value);
-  }
+  // Custom placeholders like {inviter}, {action_item_1} are left as-is
+  // so the user can fill them in directly in the editor after insertion.
+  // This avoids blocking window.prompt() dialogs.
 
   return resolved;
 }
@@ -673,11 +658,19 @@ export function ComposeEditor({
           if (!editor) return;
           const resolved = resolveSnippetVariables(snippet.body, recipientEmail, senderName);
           const sanitized = DOMPurify.sanitize(resolved);
-          // Plain-text snippets (from textarea) use \n for line breaks, but TipTap
-          // parses insertContent as HTML where \n is insignificant whitespace.
-          // Convert \n to <br> for plain-text bodies so line breaks are preserved.
           const hasHtml = /<[a-z][\s\S]*>/i.test(sanitized);
-          const content = hasHtml ? sanitized : sanitized.replace(/\n/g, "<br>");
+          let content: string;
+          if (hasHtml) {
+            // Normalize Superhuman's HTML pattern: <div>text<br></div><div><br></div>
+            // Remove trailing <br> inside divs (redundant — the div itself is a block)
+            // and convert empty <div><br></div> to just a paragraph break.
+            content = sanitized
+              .replace(/<br\s*\/?>\s*<\/div>/gi, "</div>")
+              .replace(/<div>\s*<\/div>/gi, "<p></p>");
+          } else {
+            // Plain-text: convert \n to <br> so TipTap preserves line breaks
+            content = sanitized.replace(/\n/g, "<br>");
+          }
           editor.chain().focus().insertContent(content).run();
         }}
       />
