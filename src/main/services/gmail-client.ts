@@ -1514,7 +1514,7 @@ export class GmailClient {
 
     // Only include verified aliases (primary is always verified)
     return rawAliases
-      .filter((s) => s.isPrimary || s.verificationStatus === "accepted")
+      .filter((s) => s.sendAsEmail && (s.isPrimary || s.verificationStatus === "accepted"))
       .map((s) => ({
         email: s.sendAsEmail!,
         displayName: s.displayName?.trim() || undefined,

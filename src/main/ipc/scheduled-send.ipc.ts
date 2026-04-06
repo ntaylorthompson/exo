@@ -173,6 +173,7 @@ export function registerScheduledSendIpc(): void {
         if (client) {
           try {
             const draft = await client.createFullDraft({
+              from: row.from || undefined,
               to: row.to,
               cc: row.cc,
               bcc: row.bcc,

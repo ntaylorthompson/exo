@@ -149,8 +149,8 @@ export function useComposeForm({
           // so we also check the original email's To/CC from the store — that's where
           // the user's alias appears as a recipient.
           if (replyInfo) {
-            const replyRecipients = [...(replyInfo.to || []), ...(replyInfo.cc || [])].map(
-              (addr) => extractBareEmail(addr).toLowerCase(),
+            const replyRecipients = [...(replyInfo.to || []), ...(replyInfo.cc || [])].map((addr) =>
+              extractBareEmail(addr).toLowerCase(),
             );
 
             // Also check the original email's recipients (covers plain reply)
@@ -169,14 +169,24 @@ export function useComposeForm({
               allRecipients.includes(a.email.toLowerCase()),
             );
             if (matchingAlias) {
-              setFrom(matchingAlias.email);
+              setFrom(
+                matchingAlias.displayName
+                  ? `${matchingAlias.displayName} <${matchingAlias.email}>`
+                  : matchingAlias.email,
+              );
               return;
             }
           }
 
           // Default to the default alias
           const defaultAlias = result.data.find((a) => a.isDefault);
-          if (defaultAlias) setFrom(defaultAlias.email);
+          if (defaultAlias) {
+            setFrom(
+              defaultAlias.displayName
+                ? `${defaultAlias.displayName} <${defaultAlias.email}>`
+                : defaultAlias.email,
+            );
+          }
         }
       })
       .catch(() => {
