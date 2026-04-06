@@ -260,15 +260,14 @@ export function registerAnalysisIpc(): void {
               () => {},
             );
           }
+          const { agentCoordinator } = await import("../agents/agent-coordinator");
           if (draftCleanup.agentTaskId) {
-            const { agentCoordinator } = await import("../agents/agent-coordinator");
             agentCoordinator.cancel(draftCleanup.agentTaskId);
           }
           // Cancel any in-flight auto-draft agent
           const { prefetchService } = await import("../services/prefetch-service");
           const activeTaskId = prefetchService.getActiveAgentTaskId(emailId);
           if (activeTaskId) {
-            const { agentCoordinator } = await import("../agents/agent-coordinator");
             agentCoordinator.cancel(activeTaskId);
           }
         }

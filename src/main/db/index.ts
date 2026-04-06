@@ -1489,7 +1489,8 @@ export function saveAnalysis(
   const db = getDatabase();
   const effectivePriority = priority || null;
 
-  // When reclassifying as "skip", clean up any existing draft
+  // When reclassifying as "skip", clean up any existing draft.
+  // Read draft info outside the transaction so we can return it for async cleanup.
   let cleanupInfo: DraftCleanupInfo | null = null;
   if (effectivePriority === "skip") {
     const draftRow = db
@@ -1508,24 +1509,26 @@ export function saveAnalysis(
         agentTaskId: draftRow.agent_task_id,
         accountId: draftRow.account_id,
       };
-
-      // Delete agent trace first (references draft's agent_task_id)
-      if (draftRow.agent_task_id) {
-        db.prepare(`DELETE FROM agent_conversation_mirror WHERE local_task_id = ?`).run(
-          draftRow.agent_task_id,
-        );
-      }
-
-      // Delete the local draft
-      db.prepare("DELETE FROM drafts WHERE email_id = ?").run(emailId);
     }
   }
 
-  const stmt = db.prepare(`
-    INSERT OR REPLACE INTO analyses (email_id, needs_reply, reason, priority, analyzed_at)
-    VALUES (?, ?, ?, ?, ?)
-  `);
-  stmt.run(emailId, needsReply ? 1 : 0, reason, effectivePriority, Date.now());
+  // Wrap all DB writes in a transaction so draft deletion + analysis save are atomic
+  const doWrites = db.transaction(() => {
+    if (cleanupInfo) {
+      if (cleanupInfo.agentTaskId) {
+        db.prepare(`DELETE FROM agent_conversation_mirror WHERE local_task_id = ?`).run(
+          cleanupInfo.agentTaskId,
+        );
+      }
+      db.prepare("DELETE FROM drafts WHERE email_id = ?").run(emailId);
+    }
+
+    db.prepare(
+      `INSERT OR REPLACE INTO analyses (email_id, needs_reply, reason, priority, analyzed_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    ).run(emailId, needsReply ? 1 : 0, reason, effectivePriority, Date.now());
+  });
+  doWrites();
 
   return cleanupInfo;
 }
@@ -1647,14 +1650,20 @@ export function deleteThreadDrafts(threadId: string, accountId: string): DraftCl
       agentTaskId: row.agent_task_id,
       accountId,
     });
-
-    if (row.agent_task_id) {
-      db.prepare(`DELETE FROM agent_conversation_mirror WHERE local_task_id = ?`).run(
-        row.agent_task_id,
-      );
-    }
-    db.prepare("DELETE FROM drafts WHERE email_id = ?").run(row.email_id);
   }
+
+  // Batch all deletes in a transaction for atomicity
+  const doDeletes = db.transaction(() => {
+    for (const row of rows) {
+      if (row.agent_task_id) {
+        db.prepare(`DELETE FROM agent_conversation_mirror WHERE local_task_id = ?`).run(
+          row.agent_task_id,
+        );
+      }
+      db.prepare("DELETE FROM drafts WHERE email_id = ?").run(row.email_id);
+    }
+  });
+  doDeletes();
 
   return cleanupInfos;
 }
