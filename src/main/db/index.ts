@@ -1619,6 +1619,46 @@ export function deleteDraft(emailId: string): void {
   db.prepare("DELETE FROM drafts WHERE email_id = ?").run(emailId);
 }
 
+/**
+ * Delete all drafts for a thread. Removes local draft rows and agent traces.
+ * Returns cleanup info for each deleted draft so callers can handle Gmail
+ * draft deletion and agent cancellation (async operations outside the DB layer).
+ */
+export function deleteThreadDrafts(threadId: string, accountId: string): DraftCleanupInfo[] {
+  const db = getDatabase();
+  const rows = db
+    .prepare(
+      `SELECT d.email_id, d.gmail_draft_id, d.agent_task_id
+       FROM drafts d JOIN emails e ON d.email_id = e.id
+       WHERE e.thread_id = ? AND e.account_id = ?`,
+    )
+    .all(threadId, accountId) as Array<{
+    email_id: string;
+    gmail_draft_id: string | null;
+    agent_task_id: string | null;
+  }>;
+
+  if (rows.length === 0) return [];
+
+  const cleanupInfos: DraftCleanupInfo[] = [];
+  for (const row of rows) {
+    cleanupInfos.push({
+      gmailDraftId: row.gmail_draft_id,
+      agentTaskId: row.agent_task_id,
+      accountId,
+    });
+
+    if (row.agent_task_id) {
+      db.prepare(`DELETE FROM agent_conversation_mirror WHERE local_task_id = ?`).run(
+        row.agent_task_id,
+      );
+    }
+    db.prepare("DELETE FROM drafts WHERE email_id = ?").run(row.email_id);
+  }
+
+  return cleanupInfos;
+}
+
 /** Get the RFC 5322 Message-ID header for an email (used for reply threading). */
 export function getEmailMessageIdHeader(emailId: string): string | null {
   const db = getDatabase();

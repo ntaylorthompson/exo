@@ -7,6 +7,7 @@ import { networkMonitor } from "../services/network-monitor";
 import { outboxService } from "../services/outbox-service";
 import { pendingActionsQueue } from "../services/pending-actions";
 import { isNetworkError } from "../services/network-errors";
+import { deleteGmailDraftById } from "../services/gmail-draft-sync";
 import {
   getAccounts,
   saveAccount,
@@ -30,6 +31,7 @@ import {
   saveCorrespondentProfile,
   updateAccountDisplayName,
   deleteAgentTrace,
+  deleteThreadDrafts,
   saveDraft,
   type AccountRecord,
 } from "../db";
@@ -1196,6 +1198,14 @@ export function registerSyncIpc(): void {
         );
       }
 
+      // Clean up unsent drafts and agent traces for archived thread
+      const draftCleanups = deleteThreadDrafts(threadId, accountId);
+      for (const cleanup of draftCleanups) {
+        if (cleanup.gmailDraftId && cleanup.accountId) {
+          deleteGmailDraftById(cleanup.accountId, cleanup.gmailDraftId).catch(() => {});
+        }
+      }
+
       if (useFakeData) {
         return { success: true, data: undefined };
       }
@@ -1239,17 +1249,6 @@ export function registerSyncIpc(): void {
               const prev = previousLabelsMap.get(email.id) || [];
               updateEmailLabelIds(email.id, prev);
               failedIds.push(email.id);
-            }
-          }
-        }
-
-        // Clean up agent traces for archived thread emails
-        for (const email of threadEmails) {
-          if (email.draft?.agentTaskId) {
-            try {
-              deleteAgentTrace(email.draft.agentTaskId);
-            } catch {
-              /* non-critical */
             }
           }
         }
