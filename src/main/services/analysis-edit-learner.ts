@@ -439,8 +439,8 @@ async function classifyScope(
   senderEmail: string,
   senderDomain: string,
 ): Promise<{ scope: MemoryScope; scopeValue: string | null }> {
-  // Skip API call in test mode — default to person scope
-  if (process.env.EXO_TEST_MODE === "true") {
+  // Skip API call in test/demo mode — default to person scope
+  if (process.env.EXO_TEST_MODE === "true" || process.env.EXO_DEMO_MODE === "true") {
     return { scope: "person", scopeValue: senderEmail.toLowerCase() };
   }
 
