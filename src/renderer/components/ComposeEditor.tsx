@@ -316,9 +316,6 @@ function resolveSnippetVariables(
 ): string {
   let resolved = body;
 
-  // System variables that are auto-resolved (not prompted)
-  const SYSTEM_VARS = new Set(["my_name", "first_name"]);
-
   // Resolve {my_name} — escape for HTML, use replacer to avoid $-pattern interpretation
   if (senderName) {
     const escaped = escapeHtml(senderName);

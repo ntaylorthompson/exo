@@ -386,12 +386,10 @@ function SnippetForm({
     }
     return raw;
   });
-  const [shortcut, setShortcut] = useState(snippet?.shortcut ?? "");
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !body.trim()) return;
-    onSave(name.trim(), body.trim(), shortcut.trim() || undefined);
+    onSave(name.trim(), body.trim());
   };
 
   return (
