@@ -7,7 +7,6 @@ import { networkMonitor } from "../services/network-monitor";
 import { outboxService } from "../services/outbox-service";
 import { pendingActionsQueue } from "../services/pending-actions";
 import { isNetworkError } from "../services/network-errors";
-import { deleteGmailDraftById } from "../services/gmail-draft-sync";
 import {
   getAccounts,
   saveAccount,
@@ -31,7 +30,6 @@ import {
   saveCorrespondentProfile,
   updateAccountDisplayName,
   deleteAgentTrace,
-  deleteThreadDrafts,
   saveDraft,
   type AccountRecord,
 } from "../db";
@@ -1198,17 +1196,13 @@ export function registerSyncIpc(): void {
         );
       }
 
-      // Clean up unsent drafts, agent traces, and in-flight agents for archived thread
-      const draftCleanups = deleteThreadDrafts(threadId, accountId);
-      for (const cleanup of draftCleanups) {
-        if (cleanup.gmailDraftId && cleanup.accountId) {
-          deleteGmailDraftById(cleanup.accountId, cleanup.gmailDraftId).catch(() => {});
-        }
-        if (cleanup.agentTaskId) {
-          const { agentCoordinator } = await import("../agents/agent-coordinator");
-          agentCoordinator.cancel(cleanup.agentTaskId);
-        }
-      }
+      // NOTE: Draft cleanup is intentionally NOT done here. Archiving can race
+      // with undo-send (the user sends, then immediately archives within the undo
+      // window). If we delete drafts now, the user can't undo the send. Instead:
+      // - compose:send cleans up drafts when the send actually fires
+      // - saveAnalysis cleans up drafts when emails are reclassified as "skip"
+      // - Orphaned drafts for archived threads are harmless (invisible in inbox)
+      //   and get cleaned up by the 30-day data retention sweep.
 
       if (useFakeData) {
         return { success: true, data: undefined };

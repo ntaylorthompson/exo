@@ -1489,38 +1489,63 @@ export function saveAnalysis(
   const db = getDatabase();
   const effectivePriority = priority || null;
 
-  // When reclassifying as "skip", clean up any existing draft.
-  // Read draft info outside the transaction so we can return it for async cleanup.
-  let cleanupInfo: DraftCleanupInfo | null = null;
+  // When reclassifying as "skip", clean up drafts for the ENTIRE thread, not just
+  // this email. The UI shows priority at the thread level, and the draft might be
+  // on a different email than the one being reclassified (e.g., draft is on email A
+  // but email B arrives and gets classified as skip).
+  const cleanupInfos: DraftCleanupInfo[] = [];
   if (effectivePriority === "skip") {
-    const draftRow = db
-      .prepare(
-        `SELECT d.gmail_draft_id, d.agent_task_id, e.account_id
-         FROM drafts d JOIN emails e ON d.email_id = e.id
-         WHERE d.email_id = ?`,
-      )
-      .get(emailId) as
-      | { gmail_draft_id: string | null; agent_task_id: string | null; account_id: string | null }
-      | undefined;
+    // Look up thread_id and account_id for this email
+    const emailRow = db
+      .prepare(`SELECT thread_id, account_id FROM emails WHERE id = ?`)
+      .get(emailId) as { thread_id: string; account_id: string } | undefined;
 
-    if (draftRow) {
-      cleanupInfo = {
-        gmailDraftId: draftRow.gmail_draft_id,
-        agentTaskId: draftRow.agent_task_id,
-        accountId: draftRow.account_id,
-      };
+    if (emailRow) {
+      // Find all drafts in this thread
+      const draftRows = db
+        .prepare(
+          `SELECT d.email_id, d.gmail_draft_id, d.agent_task_id
+           FROM drafts d JOIN emails e ON d.email_id = e.id
+           WHERE e.thread_id = ? AND e.account_id = ?`,
+        )
+        .all(emailRow.thread_id, emailRow.account_id) as Array<{
+        email_id: string;
+        gmail_draft_id: string | null;
+        agent_task_id: string | null;
+      }>;
+
+      for (const row of draftRows) {
+        cleanupInfos.push({
+          gmailDraftId: row.gmail_draft_id,
+          agentTaskId: row.agent_task_id,
+          accountId: emailRow.account_id,
+        });
+      }
     }
   }
 
   // Wrap all DB writes in a transaction so draft deletion + analysis save are atomic
   const doWrites = db.transaction(() => {
-    if (cleanupInfo) {
-      if (cleanupInfo.agentTaskId) {
+    for (const info of cleanupInfos) {
+      if (info.agentTaskId) {
         db.prepare(`DELETE FROM agent_conversation_mirror WHERE local_task_id = ?`).run(
-          cleanupInfo.agentTaskId,
+          info.agentTaskId,
         );
       }
-      db.prepare("DELETE FROM drafts WHERE email_id = ?").run(emailId);
+    }
+    if (cleanupInfos.length > 0) {
+      // Look up the thread again inside the transaction for the DELETE
+      const emailRow = db
+        .prepare(`SELECT thread_id, account_id FROM emails WHERE id = ?`)
+        .get(emailId) as { thread_id: string; account_id: string } | undefined;
+      if (emailRow) {
+        db.prepare(
+          `DELETE FROM drafts WHERE email_id IN (
+             SELECT d.email_id FROM drafts d JOIN emails e ON d.email_id = e.id
+             WHERE e.thread_id = ? AND e.account_id = ?
+           )`,
+        ).run(emailRow.thread_id, emailRow.account_id);
+      }
     }
 
     db.prepare(
@@ -1530,7 +1555,7 @@ export function saveAnalysis(
   });
   doWrites();
 
-  return cleanupInfo;
+  return cleanupInfos.length > 0 ? cleanupInfos : null;
 }
 
 // Draft operations

@@ -757,14 +757,18 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       this.processedAnalysis.add(emailId);
       this.processedCounts.analysis++;
 
-      // If reclassified as "skip" and had a draft, clean up Gmail draft and cancel agents
+      // If reclassified as "skip" and thread had drafts, clean up Gmail drafts and cancel agents
       if (draftCleanup) {
         log.info(
-          `[Prefetch] Email ${emailId} reclassified as skip — deleted local draft` +
-            (draftCleanup.gmailDraftId ? ` and queuing Gmail draft deletion` : ``),
+          `[Prefetch] Email ${emailId} reclassified as skip — deleted ${draftCleanup.length} thread draft(s)`,
         );
-        if (draftCleanup.gmailDraftId && draftCleanup.accountId) {
-          deleteGmailDraftById(draftCleanup.accountId, draftCleanup.gmailDraftId).catch(() => {});
+        for (const cleanup of draftCleanup) {
+          if (cleanup.gmailDraftId && cleanup.accountId) {
+            deleteGmailDraftById(cleanup.accountId, cleanup.gmailDraftId).catch(() => {});
+          }
+          if (cleanup.agentTaskId) {
+            agentCoordinator.cancel(cleanup.agentTaskId);
+          }
         }
         // Cancel any in-flight agent draft for this email
         const activeTaskId = this.activeAgentTaskIds.get(emailId);

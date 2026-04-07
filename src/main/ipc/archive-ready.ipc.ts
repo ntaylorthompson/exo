@@ -9,9 +9,7 @@ import {
   getAnalyzedArchiveThreadIds,
   getAccounts,
   updateEmailLabelIds,
-  deleteThreadDrafts,
 } from "../db";
-import { deleteGmailDraftById } from "../services/gmail-draft-sync";
 import { getConfig, getModelIdForFeature } from "./settings.ipc";
 import { getEmailSyncService } from "./sync.ipc";
 import type { IpcResponse, DashboardEmail } from "../../shared/types";
@@ -265,7 +263,6 @@ export function registerArchiveReadyIpc(): void {
             (email.labelIds || []).filter((l: string) => l !== "INBOX"),
           );
         }
-        deleteThreadDrafts(threadId, accountId);
         dismissArchiveReady(threadId, accountId);
         const win = getMainWindow();
         if (win && removedIds.length > 0) {
@@ -303,18 +300,6 @@ export function registerArchiveReadyIpc(): void {
         // Only dismiss if at least one email was archived
         if (archivedIds.length > 0) {
           dismissArchiveReady(threadId, accountId);
-
-          // Clean up drafts, agent traces, and in-flight agents for archived thread
-          const draftCleanups = deleteThreadDrafts(threadId, accountId);
-          for (const cleanup of draftCleanups) {
-            if (cleanup.gmailDraftId) {
-              deleteGmailDraftById(accountId, cleanup.gmailDraftId).catch(() => {});
-            }
-            if (cleanup.agentTaskId) {
-              const { agentCoordinator } = await import("../agents/agent-coordinator");
-              agentCoordinator.cancel(cleanup.agentTaskId);
-            }
-          }
 
           // Notify renderer: remove entire thread (including SENT emails) so no ghost thread remains
           const allThreadEmailIds = threadEmails.map((e) => e.id);
@@ -355,7 +340,6 @@ export function registerArchiveReadyIpc(): void {
             );
             allRemovedIds.push(email.id);
           }
-          deleteThreadDrafts(row.threadId, accountId);
           dismissArchiveReady(row.threadId, accountId);
         }
 
@@ -404,17 +388,6 @@ export function registerArchiveReadyIpc(): void {
             // Collect ALL emails in thread for removal (including SENT) so no ghost threads
             for (const email of threadEmails) {
               allRemovedIds.push(email.id);
-            }
-            // Clean up drafts, agent traces, and in-flight agents for archived thread
-            const draftCleanups = deleteThreadDrafts(row.threadId, accountId);
-            for (const cleanup of draftCleanups) {
-              if (cleanup.gmailDraftId) {
-                deleteGmailDraftById(accountId, cleanup.gmailDraftId).catch(() => {});
-              }
-              if (cleanup.agentTaskId) {
-                const { agentCoordinator } = await import("../agents/agent-coordinator");
-                agentCoordinator.cancel(cleanup.agentTaskId);
-              }
             }
             dismissArchiveReady(row.threadId, accountId);
             archived++;

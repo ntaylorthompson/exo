@@ -257,15 +257,19 @@ export function registerAnalysisIpc(): void {
           `[Analysis] Priority overridden for ${emailId}: ${originalPriority ?? "skip"} → ${newPriority ?? "skip"}`,
         );
 
-        // If reclassified as skip and had a draft, clean up Gmail draft and cancel agents
+        // If reclassified as skip and thread had drafts, clean up Gmail drafts and cancel agents
         if (draftCleanup) {
-          log.info(`[Analysis] Cleaning up draft for ${emailId} after skip reclassification`);
-          if (draftCleanup.gmailDraftId && draftCleanup.accountId) {
-            deleteGmailDraftById(draftCleanup.accountId, draftCleanup.gmailDraftId).catch(() => {});
-          }
+          log.info(
+            `[Analysis] Cleaning up ${draftCleanup.length} thread draft(s) for ${emailId} after skip reclassification`,
+          );
           const { agentCoordinator } = await import("../agents/agent-coordinator");
-          if (draftCleanup.agentTaskId) {
-            agentCoordinator.cancel(draftCleanup.agentTaskId);
+          for (const cleanup of draftCleanup) {
+            if (cleanup.gmailDraftId && cleanup.accountId) {
+              deleteGmailDraftById(cleanup.accountId, cleanup.gmailDraftId).catch(() => {});
+            }
+            if (cleanup.agentTaskId) {
+              agentCoordinator.cancel(cleanup.agentTaskId);
+            }
           }
           // Cancel any in-flight auto-draft agent
           const { prefetchService } = await import("../services/prefetch-service");
