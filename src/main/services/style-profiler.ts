@@ -219,6 +219,7 @@ async function fetchAndCacheSentEmails(
       body: email.body,
       date: email.date,
       is_reply: email.subject.toLowerCase().startsWith("re:") ? 1 : 0,
+      to_address: email.to,
     });
   }
 
@@ -424,9 +425,10 @@ export async function inferStyleFromSentEmails(
   // Build the email samples for the prompt
   const emailSamples = emails
     .map((e) => {
-      // Strip quoted/forwarded content first so we only analyze the user's own writing
-      const stripped = stripQuotedContent(e.body);
-      const text = stripHtmlForSearch(stripped);
+      // Use pre-extracted plain text when available, otherwise strip HTML first
+      const plainText = e.body_text ?? stripHtmlForSearch(e.body);
+      // Strip quoted/forwarded content so we only analyze the user's own writing
+      const text = stripQuotedContent(plainText);
       const truncated = truncateBody(text, 300);
       const type = e.is_reply ? "reply" : "new";
       return `---\nTo: ${e.to_address ?? "unknown"}\nSubject: ${e.subject}\nDate: ${e.date}\nType: ${type}\n\n${truncated}\n---`;

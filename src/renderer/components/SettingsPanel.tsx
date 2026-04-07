@@ -63,6 +63,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   const [saveResult, setSaveResult] = useState<string | null>(null);
   const [stylePrompt, setStylePrompt] = useState("");
   const [isInferring, setIsInferring] = useState(false);
+  const [inferError, setInferError] = useState<string | null>(null);
   const [agentDrafterPrompt, setAgentDrafterPrompt] = useState("");
   const [isRerunningAll, setIsRerunningAll] = useState(false);
   const [rerunResult, setRerunResult] = useState<string | null>(null);
@@ -480,7 +481,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
 
   const handleInferStyle = async () => {
     setIsInferring(true);
-    setSaveResult(null);
+    setInferError(null);
     try {
       const result = (await window.api.style.infer()) as {
         success: boolean;
@@ -490,10 +491,10 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       if (result.success && result.data) {
         setStylePrompt(result.data);
       } else {
-        setSaveResult(result.error || "Failed to infer writing style");
+        setInferError(result.error || "Failed to infer writing style");
       }
     } catch {
-      setSaveResult("Failed to infer writing style");
+      setInferError("Failed to infer writing style");
     } finally {
       setIsInferring(false);
     }
@@ -2111,6 +2112,9 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                   This prompt is prepended to your draft generation when style examples are
                   available. It tells the AI how to interpret the examples of your past emails.
                 </p>
+                {inferError && (
+                  <p className="text-xs text-red-600 dark:text-red-400 mt-1">{inferError}</p>
+                )}
               </div>
 
               <button

@@ -51,10 +51,33 @@ Do NOT include example phrases or quoted text from the emails.`;
  * Build the email samples portion of the prompt, mirroring the logic
  * in inferStyleFromSentEmails.
  */
+// Simplified version of stripQuotedContent for plain text
+// (matches the production code path: body_text → stripQuotedContent → truncateBody)
+function stripQuotedContent(text: string): string {
+  if (!text) return text;
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    // "On ... wrote:" header
+    if (/^on\s.+wrote:\s*$/i.test(line)) {
+      return lines.slice(0, i).join("\n").trimEnd();
+    }
+    // Block of ">" quoted lines
+    if (line.startsWith(">")) {
+      const above = lines.slice(0, i).join("\n").trimEnd();
+      if (above && !above.split("\n").every((l) => l.trim().startsWith(">"))) {
+        return above;
+      }
+    }
+  }
+  return text;
+}
+
 function buildEmailSamples(emails: SentEmailRow[]): string {
   return emails
     .map((e) => {
-      const text = e.body_text ?? stripHtmlForSearch(e.body);
+      const plainText = e.body_text ?? stripHtmlForSearch(e.body);
+      const text = stripQuotedContent(plainText);
       const truncated = truncateBody(text, 300);
       const type = e.is_reply ? "reply" : "new";
       return `---\nTo: ${e.to_address ?? "unknown"}\nSubject: ${e.subject}\nDate: ${e.date}\nType: ${type}\n\n${truncated}\n---`;
