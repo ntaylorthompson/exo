@@ -480,6 +480,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
 
   const handleInferStyle = async () => {
     setIsInferring(true);
+    setSaveResult(null);
     try {
       const result = (await window.api.style.infer()) as {
         success: boolean;
@@ -488,7 +489,11 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       };
       if (result.success && result.data) {
         setStylePrompt(result.data);
+      } else {
+        setSaveResult(result.error || "Failed to infer writing style");
       }
+    } catch {
+      setSaveResult("Failed to infer writing style");
     } finally {
       setIsInferring(false);
     }

@@ -381,7 +381,10 @@ Do NOT include example phrases or quoted text from the emails.`;
  * their writing style using Claude Opus. Returns a style description that
  * can be used as the stylePrompt.
  */
-export async function inferStyleFromSentEmails(gmailClient?: GmailClient | null): Promise<string> {
+export async function inferStyleFromSentEmails(
+  gmailClient?: GmailClient | null,
+  gmailAccountId?: string,
+): Promise<string> {
   // Fetch recent sent emails from local DB (all accounts)
   let emails = getRecentSentEmailsWithBody(100);
 
@@ -392,7 +395,7 @@ export async function inferStyleFromSentEmails(gmailClient?: GmailClient | null)
       const gmailRows = await fetchAndCacheSentEmails(
         gmailClient,
         "from:me in:sent",
-        "default",
+        gmailAccountId ?? "default",
         100,
       );
       // Merge, dedup by ID

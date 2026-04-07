@@ -581,9 +581,9 @@ export function registerSettingsIpc(): void {
       const syncService = getEmailSyncService();
       const { getAccounts: getDbAccounts } = await import("../db");
       const accounts = getDbAccounts();
-      const gmailClient =
-        accounts.length > 0 ? syncService.getClientForAccount(accounts[0].id) : null;
-      const result = await inferStyleFromSentEmails(gmailClient);
+      const firstAccountId = accounts.length > 0 ? accounts[0].id : undefined;
+      const gmailClient = firstAccountId ? syncService.getClientForAccount(firstAccountId) : null;
+      const result = await inferStyleFromSentEmails(gmailClient, firstAccountId);
       return { success: true, data: result };
     } catch (error) {
       return {
