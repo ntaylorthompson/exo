@@ -395,6 +395,10 @@ export function registerComposeIpc(): void {
             if (cleanup.gmailDraftId) {
               deleteGmailDraftById(options.accountId, cleanup.gmailDraftId).catch(() => {});
             }
+            if (cleanup.agentTaskId) {
+              const { agentCoordinator } = await import("../agents/agent-coordinator");
+              agentCoordinator.cancel(cleanup.agentTaskId);
+            }
           }
 
           // Fire-and-forget: learn from draft edits (compare AI draft vs what was sent)

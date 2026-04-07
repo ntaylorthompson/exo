@@ -111,8 +111,15 @@ export function registerAnalysisIpc(): void {
 
         const result = await analyzerInstance.analyze(emailForAnalysis, userEmail, email.accountId);
 
-        // Save analysis to database
-        saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
+        // Save analysis to database (also cleans up thread drafts if reclassified as skip)
+        const draftCleanup = saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
+        if (draftCleanup) {
+          for (const cleanup of draftCleanup) {
+            if (cleanup.gmailDraftId && cleanup.accountId) {
+              deleteGmailDraftById(cleanup.accountId, cleanup.gmailDraftId).catch(() => {});
+            }
+          }
+        }
 
         // Return updated email with analysis
         const updatedEmail = getEmail(emailId);
@@ -189,7 +196,14 @@ export function registerAnalysisIpc(): void {
               userEmail,
               email.accountId,
             );
-            saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
+            const batchCleanup = saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
+            if (batchCleanup) {
+              for (const cleanup of batchCleanup) {
+                if (cleanup.gmailDraftId && cleanup.accountId) {
+                  deleteGmailDraftById(cleanup.accountId, cleanup.gmailDraftId).catch(() => {});
+                }
+              }
+            }
 
             const updatedEmail = getEmail(emailId);
             if (updatedEmail) {
