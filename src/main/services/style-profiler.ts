@@ -11,6 +11,7 @@ import {
 } from "../db";
 import type { GmailClient } from "./gmail-client";
 import { createMessage } from "./anthropic-service";
+import { stripQuotedContent } from "./strip-quoted-content";
 import { createLogger } from "./logger";
 
 const log = createLogger("style-profiler");
@@ -420,7 +421,9 @@ export async function inferStyleFromSentEmails(gmailClient?: GmailClient | null)
   // Build the email samples for the prompt
   const emailSamples = emails
     .map((e) => {
-      const text = e.body_text ?? stripHtmlForSearch(e.body);
+      // Strip quoted/forwarded content first so we only analyze the user's own writing
+      const stripped = stripQuotedContent(e.body);
+      const text = stripHtmlForSearch(stripped);
       const truncated = truncateBody(text, 300);
       const type = e.is_reply ? "reply" : "new";
       return `---\nTo: ${e.to_address ?? "unknown"}\nSubject: ${e.subject}\nDate: ${e.date}\nType: ${type}\n\n${truncated}\n---`;
