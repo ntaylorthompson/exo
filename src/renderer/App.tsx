@@ -1507,7 +1507,6 @@ export default function App() {
 
   const handleCancelReauth = async () => {
     await window.api.auth.cancelReauth();
-    setReauthingAccountId(null);
   };
 
   const handleSetupComplete = () => {
