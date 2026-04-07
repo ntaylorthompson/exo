@@ -141,8 +141,6 @@ const SnippetList = forwardRef<SnippetListRef, SnippetListProps>(({ items, comma
               ? "bg-blue-50 dark:bg-gray-700"
               : "hover:bg-gray-100 dark:hover:bg-gray-700/50"
           }`}
-          // Use mousedown + preventDefault to keep editor focus (click would blur the editor
-          // and cause the suggestion plugin to close before the command fires)
           onMouseDown={(e) => {
             e.preventDefault();
             selectItem(index);
@@ -174,11 +172,14 @@ function stripHtmlPreview(html: string): string {
 
 const snippetPluginKey = new PluginKey("snippetSuggestion");
 
+interface SnippetContext {
+  snippets: Snippet[];
+  recipientEmail?: string;
+  senderName?: string;
+}
+
 interface SnippetMentionOptions {
-  snippetsRef: React.RefObject<Snippet[]>;
-  onInsertRef: React.RefObject<
-    ((snippet: Snippet, range: { from: number; to: number }) => void) | null
-  >;
+  contextRef: React.RefObject<SnippetContext>;
 }
 
 const SnippetMention = Extension.create<SnippetMentionOptions>({
@@ -186,20 +187,19 @@ const SnippetMention = Extension.create<SnippetMentionOptions>({
 
   addOptions() {
     return {
-      snippetsRef: { current: [] },
-      onInsertRef: { current: null },
+      contextRef: { current: { snippets: [] } },
     };
   },
 
   addProseMirrorPlugins() {
-    const { snippetsRef, onInsertRef } = this.options;
+    const { contextRef } = this.options;
 
     const suggestionConfig: Omit<SuggestionOptions<Snippet>, "editor"> = {
       char: ";",
       pluginKey: snippetPluginKey,
       // Show all snippets immediately (no prefix required), then filter as user types
       items: ({ query }): Snippet[] => {
-        const all = snippetsRef.current ?? [];
+        const all = contextRef.current?.snippets ?? [];
         if (!query) return all;
         const q = query.toLowerCase();
         return all.filter(
@@ -210,7 +210,23 @@ const SnippetMention = Extension.create<SnippetMentionOptions>({
       },
 
       command: ({ editor, range, props: snippet }) => {
-        onInsertRef.current?.(snippet, range);
+        const ctx = contextRef.current;
+        const resolved = resolveSnippetVariables(
+          snippet.body,
+          ctx?.recipientEmail,
+          ctx?.senderName,
+        );
+        const sanitized = DOMPurify.sanitize(resolved);
+        const hasHtml = /<[a-z][\s\S]*>/i.test(sanitized);
+        let content: string;
+        if (hasHtml) {
+          content = sanitized
+            .replace(/<br\s*\/?>\s*<\/div>/gi, "</div>")
+            .replace(/<div>\s*<\/div>/gi, "<p></p>");
+        } else {
+          content = sanitized.replace(/\n/g, "<br>");
+        }
+        editor.chain().focus().deleteRange(range).insertContent(content).run();
       },
 
       render: () => {
@@ -586,18 +602,16 @@ export function ComposeEditor({
   // Stable ref object for the extension (created once)
   const stableRef = useMemo(() => onAddToCcRef, []);
 
-  // Snippet suggestion refs (stable across renders, extension reads latest via ref)
-  const snippetsRef = useRef(accountSnippets);
+  // Snippet suggestion context (stable ref, extension reads latest via ref)
+  const snippetContextRef = useRef<SnippetContext>({
+    snippets: accountSnippets,
+    recipientEmail,
+    senderName,
+  });
   useEffect(() => {
-    snippetsRef.current = accountSnippets;
-  }, [accountSnippets]);
-  const stableSnippetsRef = useMemo(() => snippetsRef, []);
-
-  // Snippet insertion callback (called by the suggestion command)
-  const onSnippetInsertRef = useRef<
-    ((snippet: Snippet, range: { from: number; to: number }) => void) | null
-  >(null);
-  const stableOnInsertRef = useMemo(() => onSnippetInsertRef, []);
+    snippetContextRef.current = { snippets: accountSnippets, recipientEmail, senderName };
+  }, [accountSnippets, recipientEmail, senderName]);
+  const stableContextRef = useMemo(() => snippetContextRef, []);
 
   const editor = useEditor({
     extensions: [
@@ -628,8 +642,7 @@ export function ComposeEditor({
         onAddToCcRef: stableRef,
       }),
       SnippetMention.configure({
-        snippetsRef: stableSnippetsRef,
-        onInsertRef: stableOnInsertRef,
+        contextRef: stableContextRef,
       }),
     ],
     content: initialContent,
@@ -707,25 +720,6 @@ export function ComposeEditor({
       onChange(html, text);
     },
   });
-
-  // Set up snippet insertion callback (runs when a snippet is selected from the inline picker)
-  useEffect(() => {
-    onSnippetInsertRef.current = (snippet: Snippet, range: { from: number; to: number }) => {
-      if (!editor) return;
-      const resolved = resolveSnippetVariables(snippet.body, recipientEmail, senderName);
-      const sanitized = DOMPurify.sanitize(resolved);
-      const hasHtml = /<[a-z][\s\S]*>/i.test(sanitized);
-      let content: string;
-      if (hasHtml) {
-        content = sanitized
-          .replace(/<br\s*\/?>\s*<\/div>/gi, "</div>")
-          .replace(/<div>\s*<\/div>/gi, "<p></p>");
-      } else {
-        content = sanitized.replace(/\n/g, "<br>");
-      }
-      editor.chain().focus().deleteRange(range).insertContent(content).run();
-    };
-  }, [editor, recipientEmail, senderName]);
 
   // Update content when initialContent changes (for editing drafts)
   useEffect(() => {
