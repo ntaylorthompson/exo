@@ -94,14 +94,9 @@ function LinkPopover({
       if (anchorRef.current?.contains(target)) return;
       onClose();
     };
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
     document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscape);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
     };
   }, [onClose, anchorRef]);
 
@@ -117,6 +112,12 @@ function LinkPopover({
   return (
     <div
       ref={popoverRef}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.nativeEvent.stopImmediatePropagation();
+          onClose();
+        }
+      }}
       className="absolute top-full left-0 mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 flex items-center gap-1.5"
     >
       <input
@@ -125,6 +126,11 @@ function LinkPopover({
         value={url}
         onChange={(e) => setUrl(e.target.value)}
         onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            e.nativeEvent.stopImmediatePropagation();
+            onClose();
+          }
           if (e.key === "Enter") {
             e.preventDefault();
             apply();

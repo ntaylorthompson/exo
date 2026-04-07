@@ -64,7 +64,7 @@ test.describe("Link Popover", () => {
     // Default value should be https://
     await expect(urlInput).toHaveValue("https://");
 
-    // Close by toggling the button (not Escape, which would close compose view)
+    // Close by toggling the button
     await linkButton.click();
     await page.waitForTimeout(200);
     await expect(urlInput).not.toBeVisible();
@@ -220,7 +220,6 @@ test.describe("Link Popover", () => {
     await linkButton.click();
     await page.waitForTimeout(500);
 
-    // Close via toggle (not Escape)
     await linkButton.click();
     await page.waitForTimeout(200);
 
