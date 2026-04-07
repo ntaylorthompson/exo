@@ -340,11 +340,7 @@ function Toolbar({ editor }: { editor: Editor | null }) {
           </svg>
         </ToolbarButton>
         {showLinkPopover && (
-          <LinkPopover
-            editor={editor}
-            onClose={closeLinkPopover}
-            anchorRef={linkButtonRef}
-          />
+          <LinkPopover editor={editor} onClose={closeLinkPopover} anchorRef={linkButtonRef} />
         )}
       </div>
 
