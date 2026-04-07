@@ -240,12 +240,17 @@ export function registerAnalysisIpc(): void {
         const originalNeedsReply = originalAnalysis?.needsReply ?? false;
         const originalPriority = originalAnalysis?.priority ?? null;
 
+        // Normalize: the UI represents "skip" as priority=null + needsReply=false,
+        // but saveAnalysis checks for the literal string "skip" to trigger draft cleanup.
+        const normalizedPriority =
+          newPriority === null && !newNeedsReply ? "skip" : (newPriority ?? undefined);
+
         // Update the analysis in DB (also deletes local draft + trace if reclassified as skip)
         const draftCleanup = saveAnalysis(
           emailId,
           newNeedsReply,
           originalAnalysis?.reason ?? "User override",
-          newPriority ?? undefined,
+          normalizedPriority,
         );
 
         log.info(
