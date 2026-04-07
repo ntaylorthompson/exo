@@ -197,7 +197,8 @@ const SnippetMention = Extension.create<SnippetMentionOptions>({
     const suggestionConfig: Omit<SuggestionOptions<Snippet>, "editor"> = {
       char: ";",
       pluginKey: snippetPluginKey,
-      // Show all snippets immediately (no prefix required), then filter as user types
+      // Only trigger after whitespace or at the start of a line (not mid-word like "review this;")
+      allowedPrefixes: [" "],
       items: ({ query }): Snippet[] => {
         const all = contextRef.current?.snippets ?? [];
         if (!query) return all;
@@ -216,15 +217,18 @@ const SnippetMention = Extension.create<SnippetMentionOptions>({
           ctx?.recipientEmail,
           ctx?.senderName,
         );
-        const sanitized = DOMPurify.sanitize(resolved);
-        const hasHtml = /<[a-z][\s\S]*>/i.test(sanitized);
+        // Check if the body is HTML BEFORE sanitizing — plain text bodies
+        // would have angle brackets stripped by DOMPurify
+        const isHtml = /<[a-z][\s\S]*>/i.test(resolved);
         let content: string;
-        if (hasHtml) {
+        if (isHtml) {
+          const sanitized = DOMPurify.sanitize(resolved);
           content = sanitized
             .replace(/<br\s*\/?>\s*<\/div>/gi, "</div>")
             .replace(/<div>\s*<\/div>/gi, "<p></p>");
         } else {
-          content = sanitized.replace(/\n/g, "<br>");
+          // Plain text: escape HTML chars and convert newlines to <br>
+          content = escapeHtml(resolved).replace(/\n/g, "<br>");
         }
         editor.chain().focus().deleteRange(range).insertContent(content).run();
       },
