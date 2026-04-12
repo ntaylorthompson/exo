@@ -95,7 +95,12 @@ ${profile.summary}
       calendaringResult = await calAgent.analyze(email);
 
       if (calendaringResult.hasSchedulingContext && calendaringResult.action === "defer_to_ea") {
-        cc.push(eaConfig.email);
+        // Format EA as "Name <email>" if name is available, otherwise just "email"
+        if (eaConfig.name) {
+          cc.push(`${eaConfig.name} <${eaConfig.email}>`);
+        } else {
+          cc.push(eaConfig.email);
+        }
         const deferralLanguage = calAgent.generateEADeferralLanguage(eaConfig);
         calendaringContext = `
 IMPORTANT SCHEDULING INSTRUCTION:
