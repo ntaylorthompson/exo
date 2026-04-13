@@ -2,6 +2,7 @@ import { createMessage } from "./anthropic-service";
 import type { GmailClient } from "./gmail-client";
 import { CalendaringAgent } from "./calendaring-agent";
 import { getEnrichmentBySender } from "../extensions/enrichment-store";
+import { quoteDisplayName } from "../utils/address-formatting";
 import {
   DEFAULT_DRAFT_PROMPT,
   DRAFT_FORMAT_SUFFIX,
@@ -97,7 +98,7 @@ ${profile.summary}
       if (calendaringResult.hasSchedulingContext && calendaringResult.action === "defer_to_ea") {
         // Format EA as "Name <email>" if name is available, otherwise just "email"
         if (eaConfig.name) {
-          cc.push(`${eaConfig.name} <${eaConfig.email}>`);
+          cc.push(`${quoteDisplayName(eaConfig.name)} <${eaConfig.email}>`);
         } else {
           cc.push(eaConfig.email);
         }
