@@ -221,6 +221,11 @@ function defaultCliExecutor(
 
     let stdout = "";
     let stderr = "";
+    let settled = false;
+
+    const settle = (fn: () => void) => {
+      if (!settled) { settled = true; fn(); }
+    };
 
     child.stdout.on("data", (data: Buffer) => {
       stdout += data.toString();
@@ -229,24 +234,35 @@ function defaultCliExecutor(
       stderr += data.toString();
     });
 
+    // Swallow EPIPE on stdin — the child may exit before we finish writing
+    child.stdin.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code !== "EPIPE") {
+        settle(() => reject(err));
+      }
+    });
+
     child.on("error", (err) => {
-      reject(err);
+      settle(() => reject(err));
     });
 
     child.on("close", (code) => {
       if (code === 0) {
-        resolve({ stdout, stderr });
+        settle(() => resolve({ stdout, stderr }));
       } else {
-        const err = new Error(`CLI exited with code ${code}: ${stderr.slice(0, 500)}`);
-        (err as Error & { code: number; stderr: string }).code = code ?? 1;
-        (err as Error & { stderr: string }).stderr = stderr;
-        reject(err);
+        settle(() => {
+          const err = new Error(`CLI exited with code ${code}: ${stderr.slice(0, 500)}`);
+          (err as Error & { code: number; stderr: string }).code = code ?? 1;
+          (err as Error & { stderr: string }).stderr = stderr;
+          reject(err);
+        });
       }
     });
 
     // Write prompt to stdin and close
-    child.stdin.write(stdin);
-    child.stdin.end();
+    child.stdin.write(stdin, (err) => {
+      // Ignore write errors — handled by the 'error' listener above
+      if (!err) child.stdin.end();
+    });
   });
 }
 

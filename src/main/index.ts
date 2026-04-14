@@ -9,6 +9,18 @@ import { createLogger, closeLogs } from "./services/logger";
 
 initDevData();
 
+// Prevent EPIPE errors on stdout/stderr from crashing the app.
+// These occur when the parent process (terminal, vite dev server) closes
+// the pipe, or when a child process (claude CLI) exits unexpectedly.
+process.stdout?.on?.("error", (err: NodeJS.ErrnoException) => {
+  if (err.code === "EPIPE") return;
+  throw err;
+});
+process.stderr?.on?.("error", (err: NodeJS.ErrnoException) => {
+  if (err.code === "EPIPE") return;
+  throw err;
+});
+
 const log = createLogger("app");
 
 // Temporary debug IPC: renderer → main stdout/log
