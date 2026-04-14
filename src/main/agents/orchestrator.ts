@@ -19,6 +19,7 @@ import type { ToolRegistry } from "./tools/registry";
 import type { ProxyContext } from "./tools/types";
 import { createSubAgentTool } from "./tools/sub-agent-tool";
 import { discoverPrivateProviders } from "./private-providers";
+import { isTrustedSender } from "../services/trusted-senders";
 
 /**
  * AgentOrchestrator runs inside the utility process.
@@ -146,7 +147,36 @@ export class AgentOrchestrator {
       this.deps.setActiveTaskId(taskId);
       try {
         const parsed = tool.inputSchema.parse(args);
-        return await tool.execute(parsed, proxyCtx);
+        const result = await tool.execute(parsed, proxyCtx);
+
+        // Redact email bodies from untrusted senders when trusted-senders mode is on.
+        // The agent sees metadata (subject, from, date) but not the body content.
+        if (toolName === "read_email" && result && typeof result === "object") {
+          const email = result as Record<string, unknown>;
+          if (
+            typeof email.from === "string" &&
+            typeof email.accountId === "string" &&
+            !isTrustedSender(email.from, email.accountId as string)
+          ) {
+            email.body = "[Email body withheld — sender not in trusted list]";
+            email.snippet = "";
+          }
+        } else if (toolName === "read_thread" && Array.isArray(result)) {
+          for (const email of result) {
+            if (
+              email &&
+              typeof email === "object" &&
+              typeof email.from === "string" &&
+              typeof email.accountId === "string" &&
+              !isTrustedSender(email.from, email.accountId)
+            ) {
+              email.body = "[Email body withheld — sender not in trusted list]";
+              email.snippet = "";
+            }
+          }
+        }
+
+        return result;
       } finally {
         this.deps.setActiveTaskId(null);
       }

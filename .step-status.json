@@ -11,5 +11,7 @@
   "step-3.2": { "status": "done", "_updated": "2026-04-14T12:35:00Z" },
   "step-3.3": { "status": "done", "_updated": "2026-04-14T12:35:00Z", "note": "electron-store key fix deferred - needs runtime testing" },
   "step-3.4": { "status": "done", "_updated": "2026-04-14T12:35:00Z" },
-  "step-4.1": { "status": "done", "_updated": "2026-04-14T18:30:00Z" }
+  "step-4.1": { "status": "done", "_updated": "2026-04-14T18:30:00Z" },
+  "step-4.2": { "status": "done", "_updated": "2026-04-14T18:45:00Z" },
+  "step-4.3": { "status": "done", "_updated": "2026-04-14T18:45:00Z" }
 }

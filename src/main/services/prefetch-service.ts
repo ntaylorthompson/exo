@@ -19,6 +19,7 @@ import type { AgentContext } from "../agents/types";
 import { DEFAULT_AGENT_DRAFTER_PROMPT } from "../../shared/types";
 import type { Email, DashboardEmail } from "../../shared/types";
 import { createLogger } from "./logger";
+import { isTrustedSender } from "./trusted-senders";
 
 const log = createLogger("prefetch");
 
@@ -279,10 +280,22 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
 
     const unanalyzed = inboxEmails.filter((e) => !e.analysis);
 
-    // Queue analysis for unanalyzed emails
-    if (unanalyzed.length > 0) {
-      log.info(`[Prefetch] Processing ${unanalyzed.length} unanalyzed inbox emails`);
-      await this.queueEmails(unanalyzed.map((e) => e.id));
+    // Filter out untrusted senders when trusted-senders mode is enabled.
+    // Untrusted email bodies are never sent to the LLM for analysis.
+    const trustedUnanalyzed = unanalyzed.filter((e) => {
+      if (!e.accountId) return true; // no account context — allow (shouldn't happen)
+      if (isTrustedSender(e.from, e.accountId)) return true;
+      return false;
+    });
+    const untrustedCount = unanalyzed.length - trustedUnanalyzed.length;
+    if (untrustedCount > 0) {
+      log.info(`[Prefetch] Skipping ${untrustedCount} emails from untrusted senders`);
+    }
+
+    // Queue analysis for unanalyzed emails from trusted senders
+    if (trustedUnanalyzed.length > 0) {
+      log.info(`[Prefetch] Processing ${trustedUnanalyzed.length} unanalyzed inbox emails`);
+      await this.queueEmails(trustedUnanalyzed.map((e) => e.id));
     } else {
       log.info("[Prefetch] No unanalyzed inbox emails to process");
     }
@@ -374,7 +387,9 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
             !this.processedDrafts.has(e.id) &&
             !this.queue.some((t) => t.type === "agent-draft" && t.emailId === e.id) &&
             !this.agentDraftItems.has(e.id) &&
-            !this.agentDraftBacklog.some((t) => t.emailId === e.id),
+            !this.agentDraftBacklog.some((t) => t.emailId === e.id) &&
+            // Skip auto-drafting for untrusted senders
+            (!e.accountId || isTrustedSender(e.from, e.accountId)),
         );
     // Also skip threads that already have a draft on any email (completed or in-progress)
     const threadsWithDrafts = new Set(inboxEmails.filter((e) => e.draft).map((e) => e.threadId));
