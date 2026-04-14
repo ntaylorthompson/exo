@@ -1,3 +1,28 @@
+# Security-Hardened Fork
+
+This is a security-hardened fork of [ankitvgupta/exo](https://github.com/ankitvgupta/exo). See these documents for the full specification and build plan:
+
+- `spec.md` — Product requirements, security audit, alignment risk analysis
+- `implementation-plan.md` — Step-by-step build plan with acceptance criteria
+
+## Key Differences from Upstream
+
+1. **Claude Code CLI backend** — No Anthropic API key. LLM calls route through `claude -p --output-format json` via `child_process.execFile`. The agent framework (`@anthropic-ai/claude-agent-sdk`) already works via subscription OAuth.
+2. **AI sending disabled** — `composeNewEmail`, `forwardEmail` removed from agent tools. Draft tools elevated to MEDIUM risk (require confirmation). `modifyLabels` blocks TRASH/SPAM. Config kill switch: `aiSendingDisabled: true`.
+3. **OS keychain token storage** — OAuth tokens encrypted via Electron `safeStorage` (macOS Keychain). Files at `tokens-{accountId}.enc`. Dev mode falls back to plaintext.
+4. **Trusted senders mode** — Optional whitelist-based AI processing gate. Auto-trusts domains the user has sent to. Untrusted email bodies never sent to LLM.
+5. **Alignment safeguards** — Per-task rate limits, mandatory audit logging with hash chain, agent-created memories require user approval, anomaly detection.
+
+## Security Conventions
+
+- Never re-export `composeNewEmail`, `forwardEmail`, or `_sendReply` from `email-tools.ts`
+- All new agent tools must go through `PermissionGate` — no `ToolRiskLevel.NONE` for anything that writes
+- Token storage must use `token-storage.ts` (never raw `writeFile` for credentials)
+- All email content sent to LLM must go through `wrapUntrustedEmail()` from `prompt-safety.ts`
+- New config fields must have secure defaults (opt-in for risky features, opt-out for safety features)
+
+---
+
 # How I Work
 I value correctness, simplicity and first principles over empirical observations. Code that works but that I don't understand is not acceptable. If there are tradeoffs, explain them. If something is complex, explain why the complexity is necessary.
 
@@ -329,7 +354,7 @@ Run them with `npm run test:problematic` for debugging.
 ## Infrastructure
 
 ### AnthropicService (`src/main/services/anthropic-service.ts`)
-All LLM calls go through `createMessage()`. Handles retry with exponential backoff on rate limits / server errors, records every call to `llm_calls` table for cost tracking (model-aware pricing), and supports caller attribution. For testing, use `_setClientForTesting()` to inject a mock client.
+All LLM calls go through `createMessage()`. In this fork, the internals use `claude -p --output-format json` via `child_process.execFile` instead of the Anthropic SDK directly. The function signature is unchanged — all consumers work without modification. Handles retry with exponential backoff on rate limits / server errors, records every call to `llm_calls` table for cost tracking, and supports caller attribution. For testing, use `_setCliExecutorForTesting()` to inject a mock executor.
 
 ### Logger (`src/main/services/logger.ts`)
 Use `createLogger("namespace")` — never raw `console.log`. Outputs JSON lines to daily log files with 7-day retention, plus pretty console output in dev. Redaction policy: email body, subject, snippet, and prompt fields are automatically redacted. Only log IDs (email_id, account_id, thread_id).
@@ -348,6 +373,7 @@ Run `npm run eval` before any prompt change. The eval harness (`tests/evals/`) r
 
 ## Environment Variables
 
-- `ANTHROPIC_API_KEY` - Required for Claude API
 - `EXO_TEST_MODE=true` - Use mock data for testing
 - `EXO_DEMO_MODE=true` - Use demo data without real API calls
+
+Note: No `ANTHROPIC_API_KEY` required. This fork uses the Claude Code CLI (`claude` command) which authenticates via the user's existing Claude Code subscription.
