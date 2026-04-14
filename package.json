@@ -19,7 +19,7 @@
     "build": "electron-vite build && npm run build:worker",
     "preview": "electron-vite preview",
     "ensure-native": "./scripts/ensure-native-modules.sh",
-    "postinstall": "electron-builder install-app-deps",
+    "postinstall": "electron-builder install-app-deps && ./scripts/ensure-native-modules.sh",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "release": "npm run build && electron-builder --publish always",

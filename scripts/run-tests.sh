@@ -55,7 +55,16 @@ rebuild_for_node() {
 rebuild_for_electron() {
     log_info "Rebuilding better-sqlite3 for Electron..."
     rm -rf node_modules/better-sqlite3/build node_modules/better-sqlite3/prebuilds 2>/dev/null || true
-    npx @electron/rebuild --force --build-from-source 2>/dev/null || {
+    # Detect real hardware arch — uname -m lies under Rosetta (reports x86_64 on arm64 hw).
+    # sysctl hw.optional.arm64 returns 1 on Apple Silicon regardless of Rosetta.
+    local host_arch
+    if sysctl -n hw.optional.arm64 2>/dev/null | grep -q '1'; then
+        host_arch="arm64"
+    else
+        host_arch=$(uname -m | sed 's/x86_64/x64/')
+    fi
+    log_info "Targeting arch: $host_arch"
+    NODE_TLS_REJECT_UNAUTHORIZED=0 npx electron-rebuild -f -w better-sqlite3 --arch "$host_arch" || {
         log_error "Failed to rebuild better-sqlite3 for Electron"
         exit 1
     }
@@ -195,7 +204,8 @@ run_integration_tests() {
 
 run_all_tests() {
     local unit_result=0
-    local electron_result=0
+    local integration_result=0
+    local e2e_result=0
 
     # Clean up stale worker databases from previous runs
     clean_test_dbs
@@ -206,7 +216,7 @@ run_all_tests() {
     # Only rebuild if needed: if better-sqlite3 loads from system Node, it's compiled
     # for Node and needs rebuilding for Electron. If it fails (ABI mismatch), it's
     # already compiled for Electron (e.g. from npm ci postinstall) — skip the ~75s rebuild.
-    log_info "=== Phase 1: Integration + E2E Tests (parallel) ==="
+    log_info "=== Phase 1a: Integration Tests ==="
     check_display
     ensure_build
     if node -e "require('better-sqlite3')" 2>/dev/null; then
@@ -215,21 +225,14 @@ run_all_tests() {
     else
         log_info "better-sqlite3 already compiled for Electron, skipping rebuild"
     fi
-    # run_playwright_tolerant requires run_with_display to already be in the
-    # function, but run_all_tests manages its own display. Use the same
-    # teardown-tolerant logic inline.
-    local e2e_log
-    e2e_log=$(mktemp)
-    run_with_display env EXO_DEMO_MODE=true npx playwright test --project=integration --project=e2e 2>&1 | tee "$e2e_log" || electron_result=$?
-    if [ $electron_result -ne 0 ]; then
-        if grep -qE '[0-9]+ failed' "$e2e_log"; then
-            log_error "E2E tests have real failures"
-        elif grep -qE '[0-9]+ passed' "$e2e_log" && grep -q 'Worker teardown timeout' "$e2e_log"; then
-            log_warn "All tests passed but worker teardown timed out (Electron process cleanup) — treating as pass"
-            electron_result=0
-        fi
-    fi
-    rm -f "$e2e_log"
+    # Run integration and e2e sequentially — running them together causes Electron
+    # launch timeouts from too many concurrent instances competing for resources.
+    run_playwright_tolerant integration || integration_result=$?
+
+    clean_test_dbs
+
+    log_info "=== Phase 1b: E2E Tests ==="
+    run_playwright_tolerant e2e || e2e_result=$?
 
     # Clean up worker databases
     clean_test_dbs
@@ -243,10 +246,15 @@ run_all_tests() {
     # Summary
     echo ""
     log_info "=== Test Summary ==="
-    if [ $electron_result -eq 0 ]; then
-        echo -e "  Integration + E2E: ${GREEN}PASSED${NC}"
+    if [ $integration_result -eq 0 ]; then
+        echo -e "  Integration:       ${GREEN}PASSED${NC}"
     else
-        echo -e "  Integration + E2E: ${RED}FAILED${NC}"
+        echo -e "  Integration:       ${RED}FAILED${NC}"
+    fi
+    if [ $e2e_result -eq 0 ]; then
+        echo -e "  E2E:               ${GREEN}PASSED${NC}"
+    else
+        echo -e "  E2E:               ${RED}FAILED${NC}"
     fi
     if [ $unit_result -eq 0 ]; then
         echo -e "  Unit:              ${GREEN}PASSED${NC}"
@@ -255,7 +263,7 @@ run_all_tests() {
     fi
 
     # Exit with failure if any test suite failed
-    if [ $unit_result -ne 0 ] || [ $electron_result -ne 0 ]; then
+    if [ $unit_result -ne 0 ] || [ $integration_result -ne 0 ] || [ $e2e_result -ne 0 ]; then
         exit 1
     fi
 }
