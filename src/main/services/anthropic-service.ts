@@ -1,26 +1,87 @@
 /**
- * AnthropicService — Central wrapper for all Claude API calls.
+ * AnthropicService — Central wrapper for all Claude LLM calls.
  *
  * Three responsibilities:
- * 1. WRAP — Thin wrapper around anthropic.messages.create()
+ * 1. WRAP — Invokes Claude Code CLI (`claude -p`) instead of the Anthropic SDK directly
  * 2. RETRY — Exponential backoff on transient errors (non-blocking async setTimeout)
  * 3. RECORD — Every call logged to llm_calls table for cost tracking
  *
  * REDACTION: Never records email body/subject. Only IDs and metadata.
+ *
+ * This fork uses the user's Claude Code subscription (CLI) instead of a separate
+ * Anthropic API key. The agent framework (@anthropic-ai/claude-agent-sdk) already
+ * works via subscription OAuth — see claude-agent-provider.ts:342-345.
  */
-import Anthropic from "@anthropic-ai/sdk";
-import type {
-  MessageCreateParamsNonStreaming,
-  Message,
-} from "@anthropic-ai/sdk/resources/messages";
+import { spawn, execSync } from "child_process";
 import { createLogger } from "./logger";
 import { randomUUID } from "crypto";
 
 const log = createLogger("anthropic");
 
-// Approximate pricing per million tokens. Last updated: 2026-03-29.
-// These are approximate and will drift as Anthropic updates pricing.
-// TODO: Make updatable without code changes (config file or API).
+// ---------------------------------------------------------------------------
+// Types — local definitions replacing @anthropic-ai/sdk imports
+// ---------------------------------------------------------------------------
+
+/** Subset of Anthropic Message type that consumers actually use. */
+export interface ClaudeMessage {
+  content: Array<{ type: string; text?: string; [key: string]: unknown }>;
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
+  model: string;
+  stop_reason: string;
+}
+
+/** Request params matching the subset of MessageCreateParamsNonStreaming that consumers pass. */
+export interface LlmRequestParams {
+  model: string;
+  max_tokens: number;
+  system?:
+    | string
+    | Array<{ type: string; text: string; cache_control?: { type: string } }>;
+  messages: Array<{
+    role: string;
+    content:
+      | string
+      | Array<{ type: string; text?: string; [key: string]: unknown }>;
+  }>;
+  tools?: Array<{ type: string; name?: string; [key: string]: unknown }>;
+  thinking?: { type: string; budget_tokens?: number };
+  temperature?: number;
+}
+
+// Backward-compat aliases so consumers importing these types still compile.
+// These are the same as the local types above.
+export type MessageCreateParamsNonStreaming = LlmRequestParams;
+export type Message = ClaudeMessage;
+
+// ---------------------------------------------------------------------------
+// CLI response shape from `claude -p --output-format json`
+// ---------------------------------------------------------------------------
+
+interface CliJsonResponse {
+  type: "result";
+  subtype: "success" | "error";
+  result: string;
+  total_cost_usd?: number;
+  duration_ms?: number;
+  is_error?: boolean;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
+  model?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Pricing & retry config (unchanged from SDK version)
+// ---------------------------------------------------------------------------
+
 const PRICING: Record<
   string,
   { input: number; output: number; cacheRead: number; cacheWrite: number }
@@ -30,12 +91,10 @@ const PRICING: Record<
   "claude-sonnet-4-20250514": { input: 3.0, output: 15.0, cacheRead: 0.3, cacheWrite: 3.75 },
   "claude-sonnet-4-5-20250929": { input: 3.0, output: 15.0, cacheRead: 0.3, cacheWrite: 3.75 },
   "claude-haiku-4-5-20251001": { input: 0.8, output: 4.0, cacheRead: 0.08, cacheWrite: 1.0 },
-  // Older model IDs that may still be in use
   "claude-3-5-sonnet-20241022": { input: 3.0, output: 15.0, cacheRead: 0.3, cacheWrite: 3.75 },
   "claude-3-5-haiku-20241022": { input: 0.8, output: 4.0, cacheRead: 0.08, cacheWrite: 1.0 },
 };
 
-// Default pricing for unknown models (use Sonnet pricing as a reasonable middle)
 const DEFAULT_PRICING = { input: 3.0, output: 15.0, cacheRead: 0.3, cacheWrite: 3.75 };
 
 interface RetryConfig {
@@ -86,33 +145,137 @@ interface CreateOptions {
   timeoutMs?: number;
 }
 
-// Anthropic client — singleton for production, replaceable for testing
-let _anthropicClient: Anthropic | null = null;
-let _defaultClient: Anthropic | null = null;
+// ---------------------------------------------------------------------------
+// CLI path resolution
+// ---------------------------------------------------------------------------
 
-/**
- * Replace the Anthropic client for testing. Pass null to reset.
- * The mock must have a `messages.create()` method matching the SDK.
- */
-export function _setClientForTesting(client: unknown): void {
-  _anthropicClient = client as Anthropic;
+let _cliPath: string | null = null;
+
+function resolveCliPath(): string {
+  if (_cliPath) return _cliPath;
+  try {
+    _cliPath = execSync("which claude", { encoding: "utf-8", timeout: 5000 }).trim();
+  } catch {
+    _cliPath = "claude"; // fall back to PATH
+  }
+  return _cliPath;
 }
 
+// ---------------------------------------------------------------------------
+// Concurrency limiter — prevent spawning too many CLI processes
+// ---------------------------------------------------------------------------
+
+const MAX_CONCURRENT = 4;
+let _activeCount = 0;
+const _queue: Array<{ resolve: () => void }> = [];
+
+function acquireSlot(): Promise<void> {
+  if (_activeCount < MAX_CONCURRENT) {
+    _activeCount++;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => _queue.push({ resolve }));
+}
+
+function releaseSlot(): void {
+  _activeCount--;
+  const next = _queue.shift();
+  if (next) {
+    _activeCount++;
+    next.resolve();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// CLI executor — injectable for testing
+// ---------------------------------------------------------------------------
+
+type CliExecutorFn = (
+  args: string[],
+  stdin: string,
+  timeoutMs?: number,
+) => Promise<{ stdout: string; stderr: string }>;
+
+let _cliExecutor: CliExecutorFn | null = null;
+
 /**
- * Reset the cached default client, forcing a fresh Anthropic() on next call.
- * Call this when the API key changes (e.g. via Settings).
+ * Replace the CLI executor for testing. Pass null to reset.
  */
+export function _setCliExecutorForTesting(executor: CliExecutorFn | null): void {
+  _cliExecutor = executor;
+}
+
+/** Default CLI executor using child_process.spawn */
+function defaultCliExecutor(
+  args: string[],
+  stdin: string,
+  timeoutMs?: number,
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const cliPath = resolveCliPath();
+    const child = spawn(cliPath, args, {
+      stdio: ["pipe", "pipe", "pipe"],
+      env: { ...process.env },
+      timeout: timeoutMs,
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (data: Buffer) => {
+      stdout += data.toString();
+    });
+    child.stderr.on("data", (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    child.on("error", (err) => {
+      reject(err);
+    });
+
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve({ stdout, stderr });
+      } else {
+        const err = new Error(`CLI exited with code ${code}: ${stderr.slice(0, 500)}`);
+        (err as Error & { code: number; stderr: string }).code = code ?? 1;
+        (err as Error & { stderr: string }).stderr = stderr;
+        reject(err);
+      }
+    });
+
+    // Write prompt to stdin and close
+    child.stdin.write(stdin);
+    child.stdin.end();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Backward-compat stubs for removed SDK functions
+// ---------------------------------------------------------------------------
+
+/** @deprecated No-op in CLI mode. Kept for backward compatibility. */
 export function resetClient(): void {
-  _defaultClient = null;
+  // No persistent client to reset in CLI mode
 }
 
-export function getClient(): Anthropic {
-  if (_anthropicClient) return _anthropicClient;
-  if (!_defaultClient) _defaultClient = new Anthropic();
-  return _defaultClient;
+/** @deprecated No-op in CLI mode. Kept for backward compatibility. */
+export function _setClientForTesting(_client: unknown): void {
+  // Use _setCliExecutorForTesting() instead
 }
 
-// Database handle — set via setDatabase() during app init
+/** @deprecated Not available in CLI mode. Returns a stub. */
+export function getClient(): unknown {
+  throw new Error(
+    "getClient() is not available in CLI mode. " +
+    "Use createMessage() or _setCliExecutorForTesting() for testing.",
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Database (unchanged)
+// ---------------------------------------------------------------------------
+
 type DatabaseInstance = {
   prepare: (sql: string) => {
     run: (...args: unknown[]) => void;
@@ -126,13 +289,8 @@ type DatabaseInstance = {
 let _db: DatabaseInstance | null = null;
 let _insertStmt: ReturnType<DatabaseInstance["prepare"]> | null = null;
 
-/**
- * Set the database handle for recording LLM calls.
- * Must be called after initDatabase() during app startup.
- */
 export function setAnthropicServiceDb(db: DatabaseInstance): void {
   _db = db;
-  // Ensure llm_calls table exists
   db.exec(`
     CREATE TABLE IF NOT EXISTS llm_calls (
       id TEXT PRIMARY KEY,
@@ -169,12 +327,10 @@ function calculateCostCents(
   cacheCreateTokens: number,
 ): number {
   const pricing = PRICING[model] || DEFAULT_PRICING;
-  // input_tokens from the API already excludes cache tokens — they're separate fields
   const inputCost = (inputTokens * pricing.input) / 1_000_000;
   const outputCost = (outputTokens * pricing.output) / 1_000_000;
   const cacheReadCost = (cacheReadTokens * pricing.cacheRead) / 1_000_000;
   const cacheWriteCost = (cacheCreateTokens * pricing.cacheWrite) / 1_000_000;
-  // Convert dollars to cents
   return (inputCost + outputCost + cacheReadCost + cacheWriteCost) * 100;
 }
 
@@ -196,13 +352,7 @@ function recordCall(
     return;
   }
 
-  const costCents = calculateCostCents(
-    model,
-    inputTokens,
-    outputTokens,
-    cacheReadTokens,
-    cacheCreateTokens,
-  );
+  const costCents = calculateCostCents(model, inputTokens, outputTokens, cacheReadTokens, cacheCreateTokens);
 
   try {
     _insertStmt.run(
@@ -221,15 +371,10 @@ function recordCall(
       errorMessage,
     );
   } catch (err) {
-    // Recording failure must never break the LLM call
     log.error({ err }, "Failed to record LLM call to database");
   }
 }
 
-/**
- * Record a streaming call's cost after it completes.
- * Use this for calls that bypass createMessage() (e.g., anthropic.messages.stream()).
- */
 export function recordStreamingCall(
   model: string,
   caller: string,
@@ -256,61 +401,139 @@ export function recordStreamingCall(
   );
 }
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 function asyncSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function getRetryCategory(error: unknown): string | null {
-  if (error instanceof Anthropic.RateLimitError) return "rate_limit";
-  if (error instanceof Anthropic.InternalServerError) return "server_error";
-  if (error instanceof Anthropic.APIConnectionError) return "connection";
-  // Check for 529 overloaded (comes as APIError with status 529)
-  if (error instanceof Anthropic.APIError && (error as { status?: number }).status === 529) {
-    return "server_error";
+  const msg = error instanceof Error ? error.message : String(error);
+  const stderr = (error as { stderr?: string }).stderr ?? "";
+  const combined = `${msg} ${stderr}`.toLowerCase();
+
+  if (combined.includes("rate limit") || combined.includes("429")) return "rate_limit";
+  if (combined.includes("overloaded") || combined.includes("529")) return "server_error";
+  if (combined.includes("500") || combined.includes("internal server error")) return "server_error";
+  if (combined.includes("enoent") || combined.includes("eacces") || combined.includes("not found")) {
+    return "connection";
   }
+  if (combined.includes("timeout") || combined.includes("timed out")) return "connection";
   return null;
 }
 
-/**
- * Create a message using Claude API with retry and cost tracking.
- */
+/** Extract system prompt text from params.system (handles string or array-of-blocks). */
+function extractSystemText(
+  system: LlmRequestParams["system"],
+): string {
+  if (!system) return "";
+  if (typeof system === "string") return system;
+  return system.map((block) => block.text).join("\n\n");
+}
+
+/** Concatenate user message content into a single prompt string for stdin. */
+function extractUserContent(messages: LlmRequestParams["messages"]): string {
+  const parts: string[] = [];
+  for (const msg of messages) {
+    if (typeof msg.content === "string") {
+      parts.push(msg.content);
+    } else {
+      for (const block of msg.content) {
+        if (block.type === "text" && block.text) {
+          parts.push(block.text);
+        }
+      }
+    }
+  }
+  return parts.join("\n\n");
+}
+
+// ---------------------------------------------------------------------------
+// createMessage() — the main entry point
+// ---------------------------------------------------------------------------
+
 export async function createMessage(
-  params: MessageCreateParamsNonStreaming,
+  params: LlmRequestParams,
   options: CreateOptions,
-): Promise<Message> {
+): Promise<ClaudeMessage> {
   const { caller, emailId, accountId, timeoutMs } = options;
   const model = params.model;
   const startTime = Date.now();
 
-  const client = getClient();
   let lastError: unknown = null;
   let totalAttempts = 0;
 
-  // Determine max retries across all categories
   const maxPossibleRetries = Math.max(...Object.values(RETRY_CONFIGS).map((c) => c.maxRetries));
 
   for (let attempt = 0; attempt <= maxPossibleRetries; attempt++) {
     totalAttempts = attempt + 1;
 
-    // Per-attempt timeout so retries get fresh abort controllers
-    let abortController: AbortController | undefined;
-    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-    if (timeoutMs) {
-      abortController = new AbortController();
-      timeoutHandle = setTimeout(() => abortController!.abort(), timeoutMs);
-    }
-
+    await acquireSlot();
     try {
-      const response = await client.messages.create(params, {
-        signal: abortController?.signal,
-      });
+      // Build CLI arguments
+      const args = [
+        "--print",
+        "--output-format", "json",
+        "--model", model,
+        "--no-input",
+        "--verbose",
+      ];
 
-      // Success — record and return
-      const usage = response.usage as unknown as Record<string, number>;
-      const inputTokens = usage.input_tokens || 0;
-      const outputTokens = usage.output_tokens || 0;
-      const cacheReadTokens = usage.cache_read_input_tokens || 0;
-      const cacheCreateTokens = usage.cache_creation_input_tokens || 0;
+      // System prompt
+      const systemText = extractSystemText(params.system);
+      if (systemText) {
+        args.push("--system-prompt", systemText);
+      }
+
+      // Web search tool
+      const hasWebSearch = params.tools?.some(
+        (t) => t.type === "web_search_20250305" || t.name === "web_search",
+      );
+      if (hasWebSearch) {
+        args.push("--allowedTools", "WebSearch");
+      }
+
+      // User message content
+      const userContent = extractUserContent(params.messages);
+
+      // Execute CLI
+      const executor = _cliExecutor ?? defaultCliExecutor;
+      const { stdout } = await executor(args, userContent, timeoutMs);
+
+      // Parse JSON response
+      let cliResponse: CliJsonResponse;
+      try {
+        cliResponse = JSON.parse(stdout);
+      } catch {
+        // Try to find JSON in output (CLI may emit non-JSON lines before the result)
+        const jsonMatch = stdout.match(/\{[\s\S]*"type"\s*:\s*"result"[\s\S]*\}/);
+        if (jsonMatch) {
+          cliResponse = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error(`Failed to parse CLI JSON output: ${stdout.slice(0, 200)}`);
+        }
+      }
+
+      if (cliResponse.subtype === "error" || cliResponse.is_error) {
+        throw new Error(`CLI returned error: ${cliResponse.result}`);
+      }
+
+      // Map CLI response to ClaudeMessage
+      const usage = cliResponse.usage ?? {};
+      const inputTokens = usage.input_tokens ?? 0;
+      const outputTokens = usage.output_tokens ?? 0;
+      const cacheReadTokens = usage.cache_read_input_tokens ?? 0;
+      const cacheCreateTokens = usage.cache_creation_input_tokens ?? 0;
+
+      // Record cost — prefer CLI's total_cost_usd when available
+      let costCents: number;
+      if (cliResponse.total_cost_usd != null && cliResponse.total_cost_usd > 0) {
+        costCents = cliResponse.total_cost_usd * 100;
+      } else {
+        costCents = calculateCostCents(model, inputTokens, outputTokens, cacheReadTokens, cacheCreateTokens);
+      }
 
       recordCall(
         model,
@@ -330,68 +553,51 @@ export async function createMessage(
         log.info({ caller, model, attempts: totalAttempts }, "LLM call succeeded after retries");
       }
 
-      return response;
+      return {
+        content: [{ type: "text", text: cliResponse.result }],
+        usage: {
+          input_tokens: inputTokens,
+          output_tokens: outputTokens,
+          cache_read_input_tokens: cacheReadTokens,
+          cache_creation_input_tokens: cacheCreateTokens,
+        },
+        model: cliResponse.model ?? model,
+        stop_reason: "end_turn",
+      };
     } catch (error) {
       lastError = error;
       const category = getRetryCategory(error);
 
-      if (!category) {
-        // Non-retryable error — fail immediately
-        break;
-      }
+      if (!category) break;
 
       const config = RETRY_CONFIGS[category];
-      if (attempt >= config.maxRetries) {
-        // Exhausted retries for this category
-        break;
-      }
+      if (attempt >= config.maxRetries) break;
 
-      // Calculate delay with exponential backoff + jitter
       const baseDelay = Math.min(config.initialDelayMs * Math.pow(2, attempt), config.maxDelayMs);
       const jitter = baseDelay * 0.1 * Math.random();
       const delay = baseDelay + jitter;
 
       log.warn(
-        {
-          caller,
-          model,
-          attempt: attempt + 1,
-          maxRetries: config.maxRetries,
-          category,
-          delayMs: Math.round(delay),
-        },
+        { caller, model, attempt: attempt + 1, maxRetries: config.maxRetries, category, delayMs: Math.round(delay) },
         "LLM call failed, retrying",
       );
 
-      // Non-blocking sleep
       await asyncSleep(delay);
     } finally {
-      if (timeoutHandle) clearTimeout(timeoutHandle);
+      releaseSlot();
     }
   }
 
-  // All retries exhausted — record failure and throw
+  // All retries exhausted
   const errMsg = lastError instanceof Error ? lastError.message : String(lastError);
-  recordCall(
-    model,
-    caller,
-    emailId || null,
-    accountId || null,
-    0,
-    0,
-    0,
-    0,
-    Date.now() - startTime,
-    false,
-    errMsg,
-  );
-
+  recordCall(model, caller, emailId || null, accountId || null, 0, 0, 0, 0, Date.now() - startTime, false, errMsg);
   throw lastError;
 }
 
-/**
- * Get usage statistics for cost visibility.
- */
+// ---------------------------------------------------------------------------
+// Usage stats (unchanged)
+// ---------------------------------------------------------------------------
+
 export function getUsageStats(): UsageStats {
   if (!_db) {
     return {
@@ -442,12 +648,8 @@ export function getUsageStats(): UsageStats {
   };
 }
 
-/**
- * Get recent call history for debugging.
- */
 export function getCallHistory(limit: number = 50): LlmCallRecord[] {
   if (!_db) return [];
-
   return _db
     .prepare("SELECT * FROM llm_calls ORDER BY created_at DESC LIMIT ?")
     .all(limit) as LlmCallRecord[];

@@ -18,7 +18,7 @@ import {
 } from "../../shared/types";
 import { resetAnalyzer } from "./analysis.ipc";
 import { resetArchiveReadyAnalyzer } from "./archive-ready.ipc";
-import { resetClient, getUsageStats, getCallHistory } from "../services/anthropic-service";
+import { getUsageStats, getCallHistory } from "../services/anthropic-service";
 import { prefetchService } from "../services/prefetch-service";
 import { agentCoordinator } from "../agents/agent-coordinator";
 import {
@@ -131,45 +131,21 @@ export function getModelIdForFeature(feature: keyof ModelConfig): string {
 }
 
 export function registerSettingsIpc(): void {
-  // Validate an Anthropic API key with a minimal API call
+  // Validate that Claude Code CLI is available
   ipcMain.handle(
-    "settings:validate-api-key",
-    async (_, { apiKey }: { apiKey: string }): Promise<IpcResponse<void>> => {
+    "settings:validate-cli",
+    async (): Promise<IpcResponse<{ version: string }>> => {
       try {
-        const Anthropic = (await import("@anthropic-ai/sdk")).default;
-
-        // Resolve model with fallback so config errors don't block validation
-        let model: string;
-        try {
-          model = getModelIdForFeature("senderLookup");
-        } catch {
-          model = "claude-haiku-4-5-20251001";
-        }
-
-        const client = new Anthropic({ apiKey, timeout: 10_000 });
-        await client.messages.create({
-          model,
-          max_tokens: 1,
-          messages: [{ role: "user", content: "hi" }],
-        });
-        return { success: true, data: undefined };
-      } catch (error) {
-        // Need Anthropic class for instanceof checks — safe to re-import (module cache)
-        const Anthropic = (await import("@anthropic-ai/sdk")).default;
-        if (error instanceof Anthropic.AuthenticationError) {
-          return { success: false, error: "Invalid API key. Please check and try again." };
-        }
-        // Rate limiting, overload (529), and permission denied (403) all happen after
-        // auth succeeds — the key is valid even if this specific request was rejected
-        if (
-          error instanceof Anthropic.RateLimitError ||
-          error instanceof Anthropic.PermissionDeniedError ||
-          (error instanceof Anthropic.APIError && error.status === 529)
-        ) {
-          return { success: true, data: undefined };
-        }
-        const msg = error instanceof Error ? error.message : "Unknown error";
-        return { success: false, error: `API key validation failed: ${msg}` };
+        const { execFile } = await import("child_process");
+        const { promisify } = await import("util");
+        const execFileAsync = promisify(execFile);
+        const { stdout } = await execFileAsync("claude", ["--version"], { timeout: 5000 });
+        return { success: true, data: { version: stdout.trim() } };
+      } catch {
+        return {
+          success: false,
+          error: "Claude Code CLI not found. Install at https://claude.ai/download",
+        };
       }
     },
   );
@@ -207,16 +183,10 @@ export function registerSettingsIpc(): void {
         autoUpdateService.setAllowPrerelease(!!newConfig.allowPrereleaseUpdates);
       }
 
-      // If anthropicApiKey changed, propagate to process.env (for Anthropic SDK)
-      // and to the agent worker (for Claude Agent SDK)
-      if ("anthropicApiKey" in config) {
-        if (newConfig.anthropicApiKey) {
-          process.env.ANTHROPIC_API_KEY = newConfig.anthropicApiKey;
-        } else {
-          delete process.env.ANTHROPIC_API_KEY;
-        }
+      // Propagate aiSendingDisabled changes to the agent worker
+      if ("aiSendingDisabled" in config) {
         agentCoordinator.updateConfig({
-          anthropicApiKey: newConfig.anthropicApiKey || undefined,
+          aiSendingDisabled: newConfig.aiSendingDisabled ?? true,
         });
       }
 
@@ -283,10 +253,8 @@ export function registerSettingsIpc(): void {
         }
       }
 
-      // Reset cached analyzer/service instances when model config or API key changes,
-      // since they hold Anthropic client instances that capture the key at construction.
-      if ("modelConfig" in config || "anthropicApiKey" in config) {
-        resetClient();
+      // Reset cached analyzer instances when model config changes.
+      if ("modelConfig" in config) {
         resetAnalyzer();
         resetArchiveReadyAnalyzer();
         prefetchService.reset();
