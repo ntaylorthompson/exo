@@ -1,5 +1,5 @@
 import { test, expect, Page, ElectronApplication } from "@playwright/test";
-import { launchElectronApp , closeApp } from "./launch-helpers";
+import { launchElectronApp, closeApp, waitForEmailListReady, pressKeyUntilVisible } from "./launch-helpers";
 
 test.describe("Agent Framework", () => {
   test.describe.configure({ mode: "serial" });
@@ -20,8 +20,7 @@ test.describe("Agent Framework", () => {
       }
     });
 
-    // Wait for inbox to fully load
-    await page.waitForTimeout(2000);
+    await waitForEmailListReady(page);
   });
 
   test.afterAll(async () => {
@@ -32,8 +31,8 @@ test.describe("Agent Framework", () => {
 
   test("Cmd+J opens the agent command palette", async () => {
     // Select the first email so palette shows quick actions
-    await page.keyboard.press("j");
-    await page.waitForTimeout(300);
+    const selected = page.locator("div[data-thread-id][data-selected='true']");
+    await pressKeyUntilVisible(page, "j", selected, { timeout: 10000 });
 
     // Press Cmd+J
     await page.keyboard.press("ControlOrMeta+j");
@@ -123,14 +122,15 @@ test.describe("Agent Framework", () => {
 
   test("agent palette filtering works", async () => {
     // Select an email first so quick actions are shown
-    await page.keyboard.press("j");
-    await page.waitForTimeout(300);
+    const selectedRow = page.locator("div[data-thread-id][data-selected='true']");
+    await pressKeyUntilVisible(page, "j", selectedRow, { timeout: 10000 });
 
+    // Open palette and wait for input to be ready
+    const input = page.locator('input[placeholder="Ask agent about this email..."]');
     await page.keyboard.press("ControlOrMeta+j");
-    await page.waitForTimeout(500);
+    await expect(input).toBeVisible({ timeout: 5000 });
 
     // Type to filter
-    const input = page.locator('input[placeholder="Ask agent about this email..."]');
     await input.fill("archive");
     await page.waitForTimeout(300);
 

@@ -1,5 +1,5 @@
 import { test, expect, Page, ElectronApplication } from "@playwright/test";
-import { launchElectronApp , closeApp } from "./launch-helpers";
+import { launchElectronApp, closeApp, waitForEmailListReady, pressKeyUntilVisible } from "./launch-helpers";
 
 /**
  * E2E Tests for optimistic archive and trash behavior.
@@ -24,8 +24,7 @@ async function countInboxThreads(page: Page): Promise<number> {
 
 /** Get the text content of the currently selected email row (not the Compose button). */
 async function getSelectedRowText(page: Page): Promise<string | null> {
-  // Scope to the email list container to avoid matching the Compose button
-  const selected = page.locator(".overflow-y-auto div[data-thread-id].bg-blue-600").first();
+  const selected = page.locator("div[data-thread-id][data-selected='true']").first();
   if (await selected.isVisible().catch(() => false)) {
     return selected.textContent();
   }
@@ -34,11 +33,8 @@ async function getSelectedRowText(page: Page): Promise<string | null> {
 
 /** Select the first inbox thread by pressing 'j' and wait for selection. */
 async function selectFirstThread(page: Page): Promise<void> {
-  await page.keyboard.press("j");
-  await page.waitForTimeout(300);
-  // Verify selection is visible
-  const selected = page.locator(".overflow-y-auto div[data-thread-id].bg-blue-600");
-  await expect(selected).toBeVisible({ timeout: 3000 });
+  const selected = page.locator("div[data-thread-id][data-selected='true']");
+  await pressKeyUntilVisible(page, "j", selected, { timeout: 10000 });
 }
 
 // ---------------------------------------------------------------------------
@@ -53,6 +49,7 @@ test.describe("Archive - Optimistic UI", () => {
     const result = await launchElectronApp({ workerIndex: testInfo.workerIndex });
     electronApp = result.app;
     page = result.page;
+    await waitForEmailListReady(page);
 
     page.on("console", (msg) => {
       if (msg.type() === "error") {
@@ -101,7 +98,7 @@ test.describe("Archive - Optimistic UI", () => {
 
   test("after archive, the next thread is automatically selected", async () => {
     // After the previous test's archive, a row should still be selected
-    const selectedRow = page.locator(".overflow-y-auto div[data-thread-id].bg-blue-600");
+    const selectedRow = page.locator("div[data-thread-id][data-selected='true']");
     await expect(selectedRow).toBeVisible({ timeout: 3000 });
 
     const selectedText = await selectedRow.textContent();
@@ -110,7 +107,7 @@ test.describe("Archive - Optimistic UI", () => {
 
   test("archive is instantaneous (sub-second)", async () => {
     const isSelected = await page
-      .locator(".overflow-y-auto div[data-thread-id].bg-blue-600")
+      .locator("div[data-thread-id][data-selected='true']")
       .isVisible()
       .catch(() => false);
     if (!isSelected) {
@@ -149,6 +146,7 @@ test.describe("Archive - Persistence", () => {
     const result = await launchElectronApp({ workerIndex: testInfo.workerIndex });
     electronApp = result.app;
     page = result.page;
+    await waitForEmailListReady(page);
   });
 
   test.afterAll(async () => {
@@ -207,6 +205,7 @@ test.describe("Archive - Rapid Succession", () => {
     const result = await launchElectronApp({ workerIndex: testInfo.workerIndex });
     electronApp = result.app;
     page = result.page;
+    await waitForEmailListReady(page);
   });
 
   test.afterAll(async () => {
@@ -223,7 +222,7 @@ test.describe("Archive - Rapid Succession", () => {
     expect(countBefore).toBeGreaterThan(3);
 
     for (let i = 0; i < 3; i++) {
-      await expect(page.locator(".overflow-y-auto div[data-thread-id].bg-blue-600")).toBeVisible({
+      await expect(page.locator("div[data-thread-id][data-selected='true']")).toBeVisible({
         timeout: 3000,
       });
       await page.waitForTimeout(200);
@@ -256,6 +255,7 @@ test.describe("Archive - Rapid Fire Race Condition", () => {
     const result = await launchElectronApp({ workerIndex: testInfo.workerIndex });
     electronApp = result.app;
     page = result.page;
+    await waitForEmailListReady(page);
 
     page.on("console", (msg) => {
       if (msg.type() === "error") {
@@ -280,7 +280,7 @@ test.describe("Archive - Rapid Fire Race Condition", () => {
     // Archive 4 threads as fast as possible (no intentional delay between presses)
     const archiveCount = 4;
     for (let i = 0; i < archiveCount; i++) {
-      await expect(page.locator(".overflow-y-auto div[data-thread-id].bg-blue-600")).toBeVisible({
+      await expect(page.locator("div[data-thread-id][data-selected='true']")).toBeVisible({
         timeout: 3000,
       });
       await page.keyboard.press("e");
@@ -333,6 +333,7 @@ test.describe("Trash - Optimistic UI", () => {
     const result = await launchElectronApp({ workerIndex: testInfo.workerIndex });
     electronApp = result.app;
     page = result.page;
+    await waitForEmailListReady(page);
 
     page.on("console", (msg) => {
       if (msg.type() === "error") {
@@ -367,13 +368,13 @@ test.describe("Trash - Optimistic UI", () => {
   });
 
   test("after trash, the next thread is automatically selected", async () => {
-    const selectedRow = page.locator(".overflow-y-auto div[data-thread-id].bg-blue-600");
+    const selectedRow = page.locator("div[data-thread-id][data-selected='true']");
     await expect(selectedRow).toBeVisible({ timeout: 3000 });
   });
 
   test("can trash multiple threads in rapid succession", async () => {
     const isSelected = await page
-      .locator(".overflow-y-auto div[data-thread-id].bg-blue-600")
+      .locator("div[data-thread-id][data-selected='true']")
       .isVisible()
       .catch(() => false);
     if (!isSelected) {
@@ -406,6 +407,7 @@ test.describe("Archive/Trash - Navigation Edge Cases", () => {
     const result = await launchElectronApp({ workerIndex: testInfo.workerIndex });
     electronApp = result.app;
     page = result.page;
+    await waitForEmailListReady(page);
   });
 
   test.afterAll(async () => {
@@ -420,7 +422,7 @@ test.describe("Archive/Trash - Navigation Edge Cases", () => {
     // Don't select anything — press 'e' immediately.
     // Verify no selection exists (no highlighted row in the list).
     const hasSelection = await page
-      .locator(".overflow-y-auto div[data-thread-id].bg-blue-600")
+      .locator("div[data-thread-id][data-selected='true']")
       .isVisible()
       .catch(() => false);
 
@@ -449,7 +451,7 @@ test.describe("Archive/Trash - Navigation Edge Cases", () => {
     while (count > 0 && archived < initialCount + 5) {
       // safety limit
       // Ensure selection is active before each archive
-      await expect(page.locator(".overflow-y-auto div[data-thread-id].bg-blue-600")).toBeVisible({
+      await expect(page.locator("div[data-thread-id][data-selected='true']")).toBeVisible({
         timeout: 2000,
       });
       await page.waitForTimeout(200);
@@ -492,6 +494,7 @@ test.describe("Archive Ready - Thread Archive via 'e' key", () => {
     const result = await launchElectronApp({ workerIndex: testInfo.workerIndex });
     electronApp = result.app;
     page = result.page;
+    await waitForEmailListReady(page);
 
     page.on("console", (msg) => {
       if (msg.type() === "error") {
@@ -536,7 +539,7 @@ test.describe("Archive Ready - Thread Archive via 'e' key", () => {
     await page.waitForTimeout(300);
 
     // Verify the Project Alpha thread is still selected after Escape
-    const selected = page.locator(".overflow-y-auto div[data-thread-id].bg-blue-600");
+    const selected = page.locator("div[data-thread-id][data-selected='true']");
     await expect(selected).toBeVisible({ timeout: 3000 });
     const selectedText = await selected.textContent();
     expect(selectedText).toContain("Project Alpha");
@@ -587,6 +590,7 @@ test.describe("Archive - Click to Select", () => {
     const result = await launchElectronApp({ workerIndex: testInfo.workerIndex });
     electronApp = result.app;
     page = result.page;
+    await waitForEmailListReady(page);
 
     page.on("console", (msg) => {
       const text = msg.text();

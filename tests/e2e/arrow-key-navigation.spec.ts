@@ -1,5 +1,5 @@
 import { test, expect, Page, ElectronApplication } from "@playwright/test";
-import { launchElectronApp , closeApp } from "./launch-helpers";
+import { launchElectronApp, closeApp, waitForEmailListReady, pressKeyUntilVisible } from "./launch-helpers";
 
 /** Best-effort screenshot */
 async function screenshot(page: Page, name: string) {
@@ -12,7 +12,7 @@ async function screenshot(page: Page, name: string) {
 
 /** Get the data-thread-id of the currently selected (highlighted) row */
 async function getSelectedThreadId(page: Page): Promise<string | null> {
-  const selected = page.locator(".overflow-y-auto div[data-thread-id].bg-blue-600").first();
+  const selected = page.locator("div[data-thread-id][data-selected='true']").first();
   if (await selected.isVisible().catch(() => false)) {
     return selected.getAttribute("data-thread-id");
   }
@@ -28,6 +28,7 @@ test.describe("Arrow Key Navigation", () => {
     const result = await launchElectronApp({ workerIndex: testInfo.workerIndex });
     electronApp = result.app;
     page = result.page;
+    await waitForEmailListReady(page);
 
     page.on("console", (msg) => {
       if (msg.type() === "error") {
@@ -43,12 +44,11 @@ test.describe("Arrow Key Navigation", () => {
   });
 
   test("ArrowDown selects first email, same as j", async () => {
-    await page.waitForTimeout(500);
     await screenshot(page, "arrow-nav-01-initial");
 
-    // Press ArrowDown to select the first thread
-    await page.keyboard.press("ArrowDown");
-    await page.waitForTimeout(300);
+    // Press ArrowDown to select the first thread (retry until selection appears)
+    const selected = page.locator("div[data-thread-id][data-selected='true']");
+    await pressKeyUntilVisible(page, "ArrowDown", selected, { timeout: 10000 });
 
     const selectedAfterArrow = await getSelectedThreadId(page);
     expect(selectedAfterArrow).not.toBeNull();
