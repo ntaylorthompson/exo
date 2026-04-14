@@ -70,13 +70,13 @@ export function registerGmailIpc(): void {
 
       try {
         const client = new GmailClient();
-        const hasAnthropicKey = !!(process.env.ANTHROPIC_API_KEY || getConfig().anthropicApiKey);
+        // CLI mode: no API key needed, always "true" for hasAnthropicKey
         return {
           success: true,
           data: {
             hasCredentials: client.hasCredentials(),
-            hasTokens: client.hasTokens(),
-            hasAnthropicKey,
+            hasTokens: await client.hasTokens(),
+            hasAnthropicKey: true,
           },
         };
       } catch (error) {

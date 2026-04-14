@@ -22,6 +22,12 @@ import { getAccounts } from "../db";
 import { getDataDir } from "../data-dir";
 import { extractEmail } from "../utils/address-formatting";
 import { createLogger } from "./logger";
+import {
+  saveTokens,
+  loadTokens,
+  hasTokens as hasTokensOnDisk,
+  getCredentialsFile,
+} from "./token-storage";
 
 const log = createLogger("gmail");
 
@@ -76,18 +82,7 @@ export async function migrateOldConfigIfNeeded(): Promise<void> {
   }
 }
 
-// Helper to get config paths
-// Credentials are shared across all accounts (same OAuth app)
-function getCredentialsFile(): string {
-  return join(getConfigDir(), "credentials.json");
-}
-
-function getTokensFile(accountId: string): string {
-  if (accountId === "default") {
-    return join(getConfigDir(), "tokens.json");
-  }
-  return join(getConfigDir(), `tokens-${accountId}.json`);
-}
+// Credentials path is now provided by token-storage.ts via getCredentialsFile()
 
 const SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -176,22 +171,16 @@ export class GmailClient {
       "http://localhost:3847/oauth2callback",
     );
 
-    // Persist silently-refreshed access tokens to disk.
+    // Persist silently-refreshed access tokens via secure storage.
     // The google-auth-library automatically refreshes access tokens when they expire,
     // but only in-memory. Without this listener, refreshed tokens are lost on restart.
     this.oauth2Client.on("tokens", (tokens) => {
-      log.info(`[Gmail] Token refreshed for account ${this.accountId}, persisting to disk`);
-      const tokensFile = getTokensFile(this.accountId);
+      log.info(`[Gmail] Token refreshed for account ${this.accountId}, persisting`);
       // Merge with existing tokens (refresh_token may not be in the event).
-      // If the file can't be read (race with another write, missing, etc.),
-      // fall back to writing just the new tokens.
-      readFile(tokensFile, "utf-8")
-        .then((content) => {
-          const existing = JSON.parse(content);
-          return { ...existing, ...tokens };
-        })
+      loadTokens(this.accountId)
+        .then((existing) => ({ ...(existing as Record<string, unknown> ?? {}), ...tokens }))
         .catch(() => tokens)
-        .then((merged) => writeFile(tokensFile, JSON.stringify(merged, null, 2)))
+        .then((merged) => saveTokens(this.accountId, merged))
         .catch((err) => {
           log.error(
             { err: err },
@@ -260,28 +249,26 @@ export class GmailClient {
     return BUNDLED_CREDENTIALS !== null || existsSync(getCredentialsFile());
   }
 
-  hasTokens(): boolean {
-    return existsSync(getTokensFile(this.accountId));
+  async hasTokens(): Promise<boolean> {
+    return hasTokensOnDisk(this.accountId);
   }
 
   private async loadOrRefreshTokens(): Promise<{ access_token: string; refresh_token: string }> {
-    const tokensFile = getTokensFile(this.accountId);
-    if (existsSync(tokensFile)) {
-      const content = await readFile(tokensFile, "utf-8");
-      const tokens = JSON.parse(content);
+    const tokens = await loadTokens(this.accountId);
+    if (tokens) {
+      const tokenObj = tokens as Record<string, unknown>;
 
       // Check if access token is expired (or about to expire in the next 5 minutes)
-      const expiryDate = tokens.expiry_date as number | undefined;
+      const expiryDate = tokenObj.expiry_date as number | undefined;
       const isExpired = expiryDate != null && expiryDate < Date.now() + 5 * 60 * 1000;
 
-      if (isExpired && tokens.refresh_token) {
+      if (isExpired && tokenObj.refresh_token) {
         log.info(`[Gmail] Access token expired for ${this.accountId}, attempting refresh`);
         try {
-          // Use a temporary client to refresh since this.oauth2Client already exists
-          this.oauth2Client!.setCredentials(tokens);
+          this.oauth2Client!.setCredentials(tokenObj);
           const { credentials } = await this.oauth2Client!.refreshAccessToken();
-          const merged = { ...tokens, ...credentials };
-          await writeFile(tokensFile, JSON.stringify(merged, null, 2));
+          const merged = { ...tokenObj, ...credentials };
+          await saveTokens(this.accountId, merged);
           log.info(`[Gmail] Token refresh successful for ${this.accountId}`);
           return merged as { access_token: string; refresh_token: string };
         } catch (err) {
@@ -291,7 +278,7 @@ export class GmailClient {
         }
       }
 
-      return tokens;
+      return tokenObj as { access_token: string; refresh_token: string };
     }
 
     return this.doOAuthFlow();
@@ -380,7 +367,7 @@ export class GmailClient {
 
     const { tokens } = await oauth2Client.getToken(code);
 
-    await writeFile(getTokensFile(this.accountId), JSON.stringify(tokens, null, 2));
+    await saveTokens(this.accountId, tokens);
     log.info(`Authorization successful! Tokens saved for account: ${this.accountId}\n`);
 
     return tokens as { access_token: string; refresh_token: string };
@@ -392,16 +379,11 @@ export class GmailClient {
     log.info("Disconnected from Gmail API");
   }
 
-  /** Delete the stored token file for this account. */
+  /** Delete the stored tokens for this account (both encrypted and plaintext). */
   async removeTokens(): Promise<void> {
-    const { unlink } = await import("fs/promises");
-    const tokensFile = getTokensFile(this.accountId);
-    try {
-      await unlink(tokensFile);
-      log.info(`[Gmail] Deleted token file for account ${this.accountId}`);
-    } catch {
-      // File may not exist, that's fine
-    }
+    const { deleteTokens } = await import("./token-storage");
+    await deleteTokens(this.accountId);
+    log.info(`[Gmail] Deleted tokens for account ${this.accountId}`);
   }
 
   /**

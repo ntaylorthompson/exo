@@ -50,19 +50,17 @@ const _clientSecret = import.meta.env.MAIN_VITE_GOOGLE_CLIENT_SECRET ?? "";
 const BUNDLED_CREDENTIALS =
   _clientId && _clientSecret ? { client_id: _clientId, client_secret: _clientSecret } : null;
 
-function getTokensFile(accountId: string): string {
-  if (accountId === "default") {
-    return join(getConfigDir(), "tokens.json");
-  }
-  return join(getConfigDir(), `tokens-${accountId}.json`);
-}
-
 async function getOAuth2Client(accountId: string): Promise<OAuth2Client | null> {
   try {
+    // Use token-storage module for secure token access
+    const { loadTokens, getCredentialsFile } = await import(
+      "../../../main/services/token-storage"
+    );
+
     let client_id: string;
     let client_secret: string;
 
-    const credentialsPath = join(getConfigDir(), "credentials.json");
+    const credentialsPath = getCredentialsFile();
     if (existsSync(credentialsPath)) {
       const credRaw = await readFile(credentialsPath, "utf-8");
       const credentials = JSON.parse(credRaw);
@@ -77,11 +75,8 @@ async function getOAuth2Client(accountId: string): Promise<OAuth2Client | null> 
       return null;
     }
 
-    const tokensPath = getTokensFile(accountId);
-    if (!existsSync(tokensPath)) return null;
-
-    const tokenRaw = await readFile(tokensPath, "utf-8");
-    const tokens = JSON.parse(tokenRaw);
+    const tokens = await loadTokens(accountId);
+    if (!tokens) return null;
 
     const oauth2 = new OAuth2Client(client_id, client_secret);
     oauth2.setCredentials(tokens);
@@ -128,12 +123,14 @@ export async function findAllCalendarAccounts(): Promise<string[]> {
     result.push("default");
   }
 
-  // Scan for other token files
+  // Scan for other token files (both encrypted .enc and plaintext .json)
   try {
     const files = await readdir(getConfigDir());
+    const seen = new Set<string>();
     for (const file of files) {
-      const match = file.match(/^tokens-(.+)\.json$/);
-      if (match) {
+      const match = file.match(/^tokens-(.+)\.(json|enc)$/);
+      if (match && !seen.has(match[1])) {
+        seen.add(match[1]);
         const accountId = match[1];
         if (await hasCalendarScope(accountId)) {
           result.push(accountId);
