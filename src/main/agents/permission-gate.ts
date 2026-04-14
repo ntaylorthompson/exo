@@ -47,6 +47,19 @@ function formatConfirmation(tool: ToolDefinition, input: unknown): string {
   switch (tool.name) {
     case "create_draft":
       return `Create a draft reply to email ${inputObj?.emailId ?? "unknown"}`;
+    case "generate_draft":
+      return `Generate an AI draft reply to email ${inputObj?.emailId ?? "unknown"}`;
+    case "update_draft":
+      return `Modify draft ${inputObj?.draftId ?? "unknown"}`;
+    case "modify_labels": {
+      const add = (inputObj?.addLabelIds as string[] | undefined)?.join(", ") ?? "";
+      const remove = (inputObj?.removeLabelIds as string[] | undefined)?.join(", ") ?? "";
+      return `Modify labels on email ${inputObj?.emailId ?? "unknown"}: add=[${add}] remove=[${remove}]`;
+    }
+    case "compose_new_email":
+      return `Compose a new email to ${(inputObj?.to as string[] | undefined)?.join(", ") ?? "unknown"}`;
+    case "forward_email":
+      return `Forward email ${inputObj?.emailId ?? "unknown"}`;
     default:
       return `Execute ${tool.name}`;
   }

@@ -51,7 +51,7 @@ const updateDraft: ToolDefinition<{
   description:
     "Update an existing local draft. Use this to modify a draft the user is currently composing — for example, to make it more formal, shorter, or to change the subject. Pass the full updated body text (not a diff). Only fields you provide will be changed.",
   category: "email",
-  riskLevel: ToolRiskLevel.LOW,
+  riskLevel: ToolRiskLevel.MEDIUM,
   inputSchema: z.object({
     draftId: z.string().describe("The draft ID to update"),
     body: z.string().optional().describe("The full updated body text (replaces existing body)"),
@@ -193,9 +193,15 @@ const modifyLabels: ToolDefinition<{
       ),
   }),
   async execute(input, ctx) {
-    // Block archiving (removing INBOX label) before any mutations
+    // Block destructive label operations before any mutations
     if (input.removeLabelIds?.includes("INBOX")) {
       throw new Error("Archiving (removing INBOX label) is disabled — too disruptive");
+    }
+    if (input.addLabelIds?.includes("TRASH")) {
+      throw new Error("Trashing emails via agent is disabled — too disruptive");
+    }
+    if (input.addLabelIds?.includes("SPAM")) {
+      throw new Error("Marking emails as spam via agent is disabled — too disruptive");
     }
 
     // The GmailClient doesn't have a generic modifyLabels, so we use
@@ -215,9 +221,6 @@ const modifyLabels: ToolDefinition<{
     if (input.addLabelIds?.includes("INBOX")) {
       await ctx.gmail("restoreToInbox", input.accountId, input.emailId);
     }
-    if (input.addLabelIds?.includes("TRASH")) {
-      await ctx.gmail("trashMessage", input.accountId, input.emailId);
-    }
     return { modified: true, emailId: input.emailId };
   },
 };
@@ -233,7 +236,7 @@ const createDraft: ToolDefinition<{
   description:
     "Create a draft reply to an email. The draft is saved locally and (if Gmail is connected) synced to Gmail. The user can review and edit the draft in the app before sending.",
   category: "email",
-  riskLevel: ToolRiskLevel.LOW,
+  riskLevel: ToolRiskLevel.MEDIUM,
   inputSchema: z.object({
     accountId: z.string().describe("The account ID"),
     emailId: z.string().describe("The email ID to reply to"),
@@ -263,7 +266,7 @@ const generateDraft: ToolDefinition<{
   description:
     "Generate a draft reply using the app's draft generation pipeline. This uses the user's configured model, writing style for the recipient, executive assistant settings, and sender context — exactly the same as the 'Generate Draft' button in the UI. Use this instead of writing the body yourself in create_draft, since it ensures consistent style matching with the user's configured model. Optionally pass instructions to guide the content (e.g., 'mention I will be out next week', 'decline politely').",
   category: "email",
-  riskLevel: ToolRiskLevel.LOW,
+  riskLevel: ToolRiskLevel.MEDIUM,
   inputSchema: z.object({
     accountId: z.string().describe("The account ID"),
     emailId: z.string().describe("The email ID to reply to"),
@@ -520,6 +523,9 @@ const searchGmail: ToolDefinition<{ accountId: string; query: string; maxResults
 
 // Each tool has a specific input generic, but the registry stores ToolDefinition (unknown input).
 // The cast is safe: tools validate input at runtime via inputSchema before execute() is called.
+// composeNewEmail and forwardEmail removed — AI-initiated sending/forwarding disabled.
+// These tools allow AI to create outbound emails to arbitrary recipients.
+// The tool definitions are preserved in the file for reference but not exported.
 export const tools: ToolDefinition[] = [
   readEmail as ToolDefinition,
   readDraft as ToolDefinition,
@@ -531,6 +537,4 @@ export const tools: ToolDefinition[] = [
   modifyLabels as ToolDefinition,
   generateDraft as ToolDefinition,
   createDraft as ToolDefinition,
-  composeNewEmail as ToolDefinition,
-  forwardEmail as ToolDefinition,
 ];

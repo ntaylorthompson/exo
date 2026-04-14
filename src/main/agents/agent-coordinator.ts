@@ -240,6 +240,7 @@ export class AgentCoordinator {
     const baseConfig: AgentFrameworkConfig = {
       model: getModelIdForFeature("agentDrafter"),
       anthropicApiKey: apiKey,
+      aiSendingDisabled: appConfig.aiSendingDisabled ?? true,
       browserConfig: browser
         ? {
             enabled: browser.enabled,

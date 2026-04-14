@@ -75,7 +75,13 @@ export class AgentOrchestrator {
 
   /** Propagate config changes to all registered providers. */
   updateConfig(config: Partial<AgentFrameworkConfig>): void {
+    const prevAiSending = this.config.aiSendingDisabled;
     this.config = { ...this.config, ...config };
+    // Invalidate cached tool registry when AI sending toggle changes
+    if (config.aiSendingDisabled !== undefined && config.aiSendingDisabled !== prevAiSending) {
+      this.toolRegistry = null;
+      this.toolRegistryPromise = null;
+    }
     for (const provider of this.providerRegistry.getAll()) {
       provider.updateConfig?.(config);
     }
@@ -94,7 +100,9 @@ export class AgentOrchestrator {
   private async getToolRegistry(): Promise<ToolRegistry> {
     if (this.toolRegistry) return this.toolRegistry;
     if (!this.toolRegistryPromise) {
-      this.toolRegistryPromise = import("./tools/registry").then((mod) => mod.buildToolRegistry());
+      this.toolRegistryPromise = import("./tools/registry").then((mod) =>
+        mod.buildToolRegistry({ aiSendingDisabled: this.config.aiSendingDisabled }),
+      );
     }
     this.toolRegistry = await this.toolRegistryPromise;
     return this.toolRegistry;

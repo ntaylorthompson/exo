@@ -89,7 +89,9 @@ export class ToolRegistry {
 }
 
 /** Create and populate a registry with all built-in tools */
-export async function buildToolRegistry(): Promise<ToolRegistry> {
+export async function buildToolRegistry(
+  config?: { aiSendingDisabled?: boolean },
+): Promise<ToolRegistry> {
   const registry = new ToolRegistry();
 
   // Dynamically import tool modules to avoid circular deps
@@ -100,7 +102,21 @@ export async function buildToolRegistry(): Promise<ToolRegistry> {
     import("./browser-tools"),
   ]);
 
-  for (const tool of emailTools.tools) registry.register(tool);
+  // When AI sending is disabled (default), block tools that create outbound
+  // email artifacts or modify drafts. The tool definitions still exist in the
+  // source for reference but are not registered in the runtime registry.
+  const blocked = new Set<string>();
+  if (config?.aiSendingDisabled !== false) {
+    blocked.add("compose_new_email");
+    blocked.add("forward_email");
+    blocked.add("create_draft");
+    blocked.add("generate_draft");
+    blocked.add("update_draft");
+  }
+
+  for (const tool of emailTools.tools) {
+    if (!blocked.has(tool.name)) registry.register(tool);
+  }
   for (const tool of analysisTools.tools) registry.register(tool);
   for (const tool of contextTools.tools) registry.register(tool);
   for (const tool of browserTools.tools) registry.register(tool);

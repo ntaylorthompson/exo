@@ -374,6 +374,7 @@ export const ConfigSchema = z.object({
   archiveReadyPrompt: z.string().optional(),
   autoDraft: AutoDraftConfigSchema.optional(),
   agentDrafterPrompt: z.string().optional(),
+  aiSendingDisabled: z.boolean().default(true),
   enableSenderLookup: z.boolean().default(true),
   theme: z.enum(["light", "dark", "system"]).default("system"),
   inboxDensity: z.enum(["default", "compact"]).default("compact"),
