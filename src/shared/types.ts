@@ -376,6 +376,13 @@ export const ConfigSchema = z.object({
   agentDrafterPrompt: z.string().optional(),
   aiSendingDisabled: z.boolean().default(true),
   enableSenderLookup: z.boolean().default(true),
+  trustedSendersMode: z
+    .object({
+      enabled: z.boolean().default(false),
+      senders: z.array(z.string()).default([]),
+      domainsAutoTrust: z.boolean().default(true),
+    })
+    .optional(),
   theme: z.enum(["light", "dark", "system"]).default("system"),
   inboxDensity: z.enum(["default", "compact"]).default("compact"),
   undoSendDelay: z.number().min(0).max(30).default(5), // seconds; 0 = disabled
