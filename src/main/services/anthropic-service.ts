@@ -24,7 +24,7 @@ const log = createLogger("anthropic");
 
 /** Subset of Anthropic Message type that consumers actually use. */
 export interface ClaudeMessage {
-  content: Array<{ type: string; text?: string; [key: string]: unknown }>;
+  content: Array<{ type: string; text: string; [key: string]: unknown }>;
   usage: {
     input_tokens: number;
     output_tokens: number;
@@ -46,7 +46,7 @@ export interface LlmRequestParams {
     role: string;
     content:
       | string
-      | Array<{ type: string; text?: string; [key: string]: unknown }>;
+      | Array<{ type: string; text: string; [key: string]: unknown }>;
   }>;
   tools?: Array<{ type: string; name?: string; [key: string]: unknown }>;
   thinking?: { type: string; budget_tokens?: number };
@@ -477,7 +477,6 @@ export async function createMessage(
         "--print",
         "--output-format", "json",
         "--model", model,
-        "--no-input",
         "--verbose",
       ];
 

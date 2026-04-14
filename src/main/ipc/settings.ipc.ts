@@ -55,6 +55,7 @@ function getStore(): Store<{ config: Config }> {
           dryRun: false,
           analysisPrompt: DEFAULT_ANALYSIS_PROMPT,
           draftPrompt: DEFAULT_DRAFT_PROMPT,
+          aiSendingDisabled: true,
           enableSenderLookup: true,
           theme: "system" as const,
           inboxDensity: "compact" as const,

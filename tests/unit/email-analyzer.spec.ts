@@ -8,12 +8,12 @@
 import { test, expect } from "@playwright/test";
 import { EmailAnalyzer } from "../../src/main/services/email-analyzer";
 import {
-  MockAnthropic,
   mockAnthropicResponse,
   resetAnthropicMock,
   getCapturedRequests,
+  getCliMockExecutor,
 } from "../mocks/anthropic-api-mock";
-import { _setClientForTesting } from "../../src/main/services/anthropic-service";
+import { _setCliExecutorForTesting } from "../../src/main/services/anthropic-service";
 import type { Email } from "../../src/shared/types";
 import { ANALYSIS_JSON_FORMAT } from "../../src/shared/types";
 
@@ -47,11 +47,11 @@ function createAnalyzerWithMock(prompt?: string): EmailAnalyzer {
 test.describe("EmailAnalyzer", () => {
   test.beforeEach(() => {
     resetAnthropicMock();
-    _setClientForTesting(new MockAnthropic());
+    _setCliExecutorForTesting(getCliMockExecutor());
   });
 
   test.afterEach(() => {
-    _setClientForTesting(null as unknown);
+    _setCliExecutorForTesting(null);
   });
 
   test("analyze() returns correct AnalysisResult for a needs-reply email", async () => {

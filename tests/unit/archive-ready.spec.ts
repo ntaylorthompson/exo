@@ -13,12 +13,12 @@
  */
 import { test, expect } from "@playwright/test";
 import {
-  MockAnthropic,
   mockAnthropicResponse,
   resetAnthropicMock,
   getCapturedRequests,
+  getCliMockExecutor,
 } from "../mocks/anthropic-api-mock";
-import { _setClientForTesting } from "../../src/main/services/anthropic-service";
+import { _setCliExecutorForTesting } from "../../src/main/services/anthropic-service";
 import { ArchiveReadyAnalyzer } from "../../src/main/services/archive-ready-analyzer";
 import { ARCHIVE_READY_JSON_FORMAT, DEFAULT_ARCHIVE_READY_PROMPT } from "../../src/shared/types";
 import type { DashboardEmail } from "../../src/shared/types";
@@ -296,11 +296,11 @@ test.describe("formatThreadForAnalysis", () => {
 test.describe("ArchiveReadyAnalyzer.analyzeThread", () => {
   test.beforeEach(() => {
     resetAnthropicMock();
-    _setClientForTesting(new MockAnthropic());
+    _setCliExecutorForTesting(getCliMockExecutor());
   });
 
   test.afterEach(() => {
-    _setClientForTesting(null as unknown);
+    _setCliExecutorForTesting(null);
   });
 
   test("returns archive_ready=true when Claude says so", async () => {

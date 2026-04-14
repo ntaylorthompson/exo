@@ -8,12 +8,12 @@
 import { test, expect } from "@playwright/test";
 import { CalendaringAgent } from "../../src/main/services/calendaring-agent";
 import {
-  MockAnthropic,
   mockAnthropicResponse,
   resetAnthropicMock,
   getCapturedRequests,
+  getCliMockExecutor,
 } from "../mocks/anthropic-api-mock";
-import { _setClientForTesting } from "../../src/main/services/anthropic-service";
+import { _setCliExecutorForTesting } from "../../src/main/services/anthropic-service";
 import type { Email, EAConfig } from "../../src/shared/types";
 
 // ---------------------------------------------------------------------------
@@ -42,11 +42,11 @@ function makeEmail(overrides: Partial<Email> = {}): Email {
 test.describe("CalendaringAgent - analyze", () => {
   test.beforeEach(() => {
     resetAnthropicMock();
-    _setClientForTesting(new MockAnthropic());
+    _setCliExecutorForTesting(getCliMockExecutor());
   });
 
   test.afterEach(() => {
-    _setClientForTesting(null as unknown);
+    _setCliExecutorForTesting(null);
   });
 
   test("detects scheduling email", async () => {

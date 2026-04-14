@@ -1,13 +1,15 @@
 /**
- * Mock for @anthropic-ai/sdk — intercepts Anthropic API calls at the module level.
+ * Mock for Claude CLI executor — intercepts CLI invocations at the module level.
  *
  * Usage in tests:
- *   import { mockAnthropicResponse, mockAnthropicError, resetAnthropicMock } from "../mocks/anthropic-api-mock";
+ *   import { mockAnthropicResponse, resetAnthropicMock, getCliMockExecutor } from "../mocks/anthropic-api-mock";
+ *   import { _setCliExecutorForTesting } from "../../src/main/services/anthropic-service";
  *
  *   // Set up a canned response
- *   mockAnthropicResponse({ text: '{"needs_reply": true, "reason": "Direct question", "priority": "high"}' });
+ *   mockAnthropicResponse({ text: '{"needs_reply": true}' });
+ *   _setCliExecutorForTesting(getCliMockExecutor());
  *
- *   // Now any service that calls `anthropic.messages.create(...)` will get this response.
+ *   // Now any service that calls createMessage() will get this response.
  */
 
 export interface MockMessageResponse {
@@ -37,6 +39,9 @@ let capturedRequests: Array<{
   tools?: unknown[];
 }> = [];
 
+// Also capture CLI args for inspection
+let capturedCliArgs: Array<{ args: string[]; stdin: string }> = [];
+
 function buildResponse(
   text: string,
   model: string = "claude-sonnet-4-20250514",
@@ -59,7 +64,7 @@ function buildResponse(
 }
 
 /**
- * Set a canned text response. All subsequent calls to messages.create() return this.
+ * Set a canned text response. All subsequent calls return this.
  */
 export function mockAnthropicResponse(opts: { text: string; model?: string }): void {
   defaultResponse = buildResponse(opts.text, opts.model);
@@ -82,10 +87,17 @@ export function mockAnthropicError(error: Error): void {
 }
 
 /**
- * Get all captured request payloads.
+ * Get captured requests. Each entry reconstructs the params from CLI args.
  */
 export function getCapturedRequests(): typeof capturedRequests {
   return [...capturedRequests];
+}
+
+/**
+ * Get raw captured CLI args for detailed inspection.
+ */
+export function getCapturedCliArgs(): typeof capturedCliArgs {
+  return [...capturedCliArgs];
 }
 
 /**
@@ -95,11 +107,65 @@ export function resetAnthropicMock(): void {
   responseQueue = [];
   defaultResponse = null;
   capturedRequests = [];
+  capturedCliArgs = [];
 }
 
 /**
- * Mock Anthropic class that replaces the real SDK.
- * Services create `new Anthropic()` and call `this.anthropic.messages.create(...)`.
+ * Get a CLI executor function that returns canned responses.
+ * Pass this to _setCliExecutorForTesting().
+ */
+export function getCliMockExecutor(): (
+  args: string[],
+  stdin: string,
+  timeoutMs?: number,
+) => Promise<{ stdout: string; stderr: string }> {
+  return async (args: string[], stdin: string) => {
+    capturedCliArgs.push({ args, stdin });
+
+    // Reconstruct a request-like object from CLI args for getCapturedRequests()
+    const modelIdx = args.indexOf("--model");
+    const model = modelIdx >= 0 ? args[modelIdx + 1] : "unknown";
+    const sysIdx = args.indexOf("--system-prompt");
+    const system = sysIdx >= 0 ? args[sysIdx + 1] : undefined;
+
+    capturedRequests.push({
+      model,
+      messages: [{ role: "user", content: stdin }],
+      system: system ? [{ type: "text", text: system }] : undefined,
+    });
+
+    // Dequeue first, fall back to default
+    let response: MockMessageResponse;
+    if (responseQueue.length > 0) {
+      const next = responseQueue.shift()!;
+      if (next instanceof Error) throw next;
+      response = next;
+    } else if (defaultResponse) {
+      response = defaultResponse;
+    } else {
+      throw new Error(
+        "[MockCliExecutor] No response configured. Call mockAnthropicResponse() before invoking services.",
+      );
+    }
+
+    // Return CLI JSON format
+    const cliResponse = {
+      type: "result",
+      subtype: "success",
+      result: response.content[0].text,
+      model: response.model,
+      total_cost_usd: 0.001,
+      duration_ms: 100,
+      usage: response.usage,
+    };
+
+    return { stdout: JSON.stringify(cliResponse), stderr: "" };
+  };
+}
+
+/**
+ * @deprecated Use getCliMockExecutor() with _setCliExecutorForTesting() instead.
+ * Kept for backward compatibility during migration.
  */
 export class MockAnthropic {
   messages = {
@@ -112,7 +178,6 @@ export class MockAnthropic {
     }): Promise<MockMessageResponse> => {
       capturedRequests.push(params);
 
-      // Dequeue first, fall back to default
       if (responseQueue.length > 0) {
         const next = responseQueue.shift()!;
         if (next instanceof Error) throw next;
@@ -123,7 +188,6 @@ export class MockAnthropic {
         return defaultResponse;
       }
 
-      // No response configured — fail loudly
       throw new Error(
         "[MockAnthropic] No response configured. Call mockAnthropicResponse() or queueAnthropicResponses() before invoking services.",
       );
