@@ -375,6 +375,7 @@ export const ConfigSchema = z.object({
   autoDraft: AutoDraftConfigSchema.optional(),
   agentDrafterPrompt: z.string().optional(),
   aiSendingDisabled: z.boolean().default(true),
+  gmailScopes: z.enum(["full", "read-organize"]).default("full"),
   enableSenderLookup: z.boolean().default(true),
   trustedSendersMode: z
     .object({

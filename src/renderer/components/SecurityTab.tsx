@@ -16,6 +16,9 @@ export function SecurityTab({ config }: SecurityTabProps) {
   const [newSender, setNewSender] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [gmailScopes, setGmailScopes] = useState<"full" | "read-organize">(
+    config?.gmailScopes ?? "full",
+  );
 
   useEffect(() => {
     if (mode) {
@@ -23,7 +26,10 @@ export function SecurityTab({ config }: SecurityTabProps) {
       setDomainsAutoTrust(mode.domainsAutoTrust ?? true);
       setSenders(mode.senders ?? []);
     }
-  }, [mode]);
+    if (config?.gmailScopes) {
+      setGmailScopes(config.gmailScopes);
+    }
+  }, [mode, config?.gmailScopes]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -35,6 +41,7 @@ export function SecurityTab({ config }: SecurityTabProps) {
           senders,
           domainsAutoTrust,
         },
+        gmailScopes,
       });
       await queryClient.invalidateQueries({ queryKey: ["general-config"] });
       setSaved(true);
@@ -200,6 +207,64 @@ export function SecurityTab({ config }: SecurityTabProps) {
             {saving ? "Saving..." : saved ? "Saved!" : "Save Changes"}
           </button>
         </div>
+      </div>
+
+      {/* Gmail Permission Scope */}
+      <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+          Gmail Permissions
+        </h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-4">
+          Control what permissions Exo requests from your Gmail account. In &quot;Read &amp;
+          Organize&quot; mode, send and compose permissions are not requested — the Send button and
+          outbox are disabled.
+        </p>
+
+        <div className="space-y-3">
+          <label className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+            <input
+              type="radio"
+              name="gmailScopes"
+              value="full"
+              checked={gmailScopes === "full"}
+              onChange={() => setGmailScopes("full")}
+              className="mt-1"
+            />
+            <div>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                Full access
+              </span>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Read, compose, send, and organize emails. Required for sending replies and drafts.
+              </p>
+            </div>
+          </label>
+          <label className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+            <input
+              type="radio"
+              name="gmailScopes"
+              value="read-organize"
+              checked={gmailScopes === "read-organize"}
+              onChange={() => setGmailScopes("read-organize")}
+              className="mt-1"
+            />
+            <div>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                Read &amp; Organize only
+              </span>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Read and label emails only. No send or compose permissions. You will need to
+                re-authorize after changing this setting.
+              </p>
+            </div>
+          </label>
+        </div>
+
+        {gmailScopes !== (config?.gmailScopes ?? "full") && (
+          <p className="mt-3 text-sm text-amber-600 dark:text-amber-400">
+            Changing scope mode requires re-authorization. Save and re-add your account to apply.
+          </p>
+        )}
       </div>
     </div>
   );

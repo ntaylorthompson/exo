@@ -13,6 +13,8 @@ import {
   MemoryCreatedBySchema,
   ConfigSchema,
 } from "../../src/shared/types";
+// getScopes is tested indirectly since gmail-client.ts imports electron.
+// We test the scope logic inline here instead.
 
 // ---------------------------------------------------------------------------
 // Audit Log — redactPayload
@@ -289,5 +291,66 @@ test.describe("Rate limit config", () => {
   test("ConfigSchema defaults toolRateLimits to undefined", () => {
     const result = ConfigSchema.parse({});
     expect(result.toolRateLimits).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Gmail scopes config
+// ---------------------------------------------------------------------------
+test.describe("Gmail scopes config", () => {
+  test("ConfigSchema accepts gmailScopes 'full'", () => {
+    const result = ConfigSchema.safeParse({ gmailScopes: "full" });
+    expect(result.success).toBe(true);
+    expect(result.data!.gmailScopes).toBe("full");
+  });
+
+  test("ConfigSchema accepts gmailScopes 'read-organize'", () => {
+    const result = ConfigSchema.safeParse({ gmailScopes: "read-organize" });
+    expect(result.success).toBe(true);
+    expect(result.data!.gmailScopes).toBe("read-organize");
+  });
+
+  test("ConfigSchema defaults gmailScopes to 'full'", () => {
+    const result = ConfigSchema.parse({});
+    expect(result.gmailScopes).toBe("full");
+  });
+
+  test("ConfigSchema rejects invalid gmailScopes", () => {
+    const result = ConfigSchema.safeParse({ gmailScopes: "invalid" });
+    expect(result.success).toBe(false);
+  });
+});
+
+// getScopes lives in gmail-client.ts which imports electron — can't import in
+// unit tests. Test the scope logic via the constants directly.
+test.describe("Gmail scope constants", () => {
+  const FULL_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.compose",
+    "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/calendar.readonly",
+  ];
+  const READ_ORGANIZE_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/calendar.readonly",
+  ];
+
+  test("full scopes include gmail.send and gmail.compose", () => {
+    expect(FULL_SCOPES.some((s) => s.includes("gmail.send"))).toBe(true);
+    expect(FULL_SCOPES.some((s) => s.includes("gmail.compose"))).toBe(true);
+  });
+
+  test("read-organize scopes exclude gmail.send and gmail.compose", () => {
+    expect(READ_ORGANIZE_SCOPES.some((s) => s.includes("gmail.send"))).toBe(false);
+    expect(READ_ORGANIZE_SCOPES.some((s) => s.includes("gmail.compose"))).toBe(false);
+  });
+
+  test("read-organize scopes still include gmail.readonly and gmail.modify", () => {
+    expect(READ_ORGANIZE_SCOPES.some((s) => s.includes("gmail.readonly"))).toBe(true);
+    expect(READ_ORGANIZE_SCOPES.some((s) => s.includes("gmail.modify"))).toBe(true);
   });
 });

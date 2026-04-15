@@ -32,6 +32,7 @@ import { useComposeForm } from "../hooks/useComposeForm";
 import { THREAD_NAV_EVENT } from "../hooks/useKeyboardShortcuts";
 import type { ComposeFormState } from "../hooks/useComposeForm";
 import { ComposeToolbar } from "./ComposeToolbar";
+import { useSendEnabled } from "../hooks/useSendEnabled";
 import { FromSelector } from "./FromSelector";
 import { trackEvent } from "../services/posthog";
 import { draftBodyToHtml } from "../../shared/draft-utils";
@@ -1108,6 +1109,7 @@ function InlineReply({
   nameMap?: Map<string, string>;
 }) {
   const isForward = composeMode === "forward";
+  const sendEnabled = useSendEnabled();
 
   const form = useComposeForm({
     accountId,
@@ -1902,7 +1904,7 @@ function InlineReply({
             onPickFiles={form.handlePickFiles}
             isSending={form.isSending}
             isScheduling={form.isScheduling}
-            canSend={form.canSend}
+            canSend={form.canSend && sendEnabled}
             activeSignatureId={form.activeSignatureId}
             onSignatureChange={form.setActiveSignatureId}
             availableSignatures={form.availableSignatures}
@@ -1927,6 +1929,7 @@ function NewEmailCompose({
   onDiscard?: () => void;
   initialDraft?: RestoredDraft | null;
 }) {
+  const sendEnabled = useSendEnabled();
   const form = useComposeForm({
     accountId,
     initialTo: initialDraft?.to ?? [],
@@ -2201,7 +2204,7 @@ function NewEmailCompose({
               onPickFiles={form.handlePickFiles}
               isSending={form.isSending}
               isScheduling={form.isScheduling}
-              canSend={form.canSend}
+              canSend={form.canSend && sendEnabled}
               activeSignatureId={form.activeSignatureId}
               onSignatureChange={form.setActiveSignatureId}
               availableSignatures={form.availableSignatures}

@@ -84,7 +84,9 @@ export async function migrateOldConfigIfNeeded(): Promise<void> {
 
 // Credentials path is now provided by token-storage.ts via getCredentialsFile()
 
-const SCOPES = [
+type GmailScopeMode = "full" | "read-organize";
+
+const FULL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.compose",
   "https://www.googleapis.com/auth/gmail.send",
@@ -92,6 +94,20 @@ const SCOPES = [
   "https://www.googleapis.com/auth/userinfo.profile",
   "https://www.googleapis.com/auth/calendar.readonly",
 ];
+
+const READ_ORGANIZE_SCOPES = [
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.modify",
+  "https://www.googleapis.com/auth/userinfo.profile",
+  "https://www.googleapis.com/auth/calendar.readonly",
+];
+
+export function getScopes(mode: GmailScopeMode = "full"): string[] {
+  return mode === "read-organize" ? READ_ORGANIZE_SCOPES : FULL_SCOPES;
+}
+
+// Default to full scopes for backward compatibility
+const SCOPES = FULL_SCOPES;
 
 interface Credentials {
   client_id: string;
@@ -284,12 +300,14 @@ export class GmailClient {
     return this.doOAuthFlow();
   }
 
-  private async doOAuthFlow(): Promise<{ access_token: string; refresh_token: string }> {
+  private async doOAuthFlow(
+    scopeMode?: GmailScopeMode,
+  ): Promise<{ access_token: string; refresh_token: string }> {
     const oauth2Client = this.oauth2Client!;
 
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: "offline",
-      scope: SCOPES,
+      scope: getScopes(scopeMode),
       prompt: "consent",
     });
 

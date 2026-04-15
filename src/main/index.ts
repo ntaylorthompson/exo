@@ -491,7 +491,17 @@ app.whenReady().then(async () => {
     },
   );
 
-  // Also handle response headers to allow images from any origin
+  // CSP + image CORS: enforce Content-Security-Policy via response headers
+  // (supplements the <meta> CSP in index.html — belt-and-suspenders defense)
+  const CSP = [
+    "default-src 'self'",
+    "script-src 'self' blob: https://us-assets.i.posthog.com https://eu-assets.i.posthog.com",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src * data: blob:",
+    "frame-src 'self' blob: data:",
+    "connect-src 'self' https://us.i.posthog.com https://eu.i.posthog.com https://us-assets.i.posthog.com https://eu-assets.i.posthog.com https://recorder.us.i.posthog.com https://recorder.eu.i.posthog.com https://www.googleapis.com https://oauth2.googleapis.com",
+  ].join("; ");
+
   session.defaultSession.webRequest.onHeadersReceived(
     { urls: ["http://*/*", "https://*/*"] },
     (details, callback) => {
@@ -509,6 +519,11 @@ app.whenReady().then(async () => {
           // Ensure CORS allows the image
           details.responseHeaders["access-control-allow-origin"] = ["*"];
         }
+      }
+
+      // Enforce CSP on all responses to the renderer
+      if (details.responseHeaders) {
+        details.responseHeaders["Content-Security-Policy"] = [CSP];
       }
 
       callback({ responseHeaders: details.responseHeaders });
