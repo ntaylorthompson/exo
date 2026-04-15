@@ -25,6 +25,7 @@ import { SplitConfigEditor } from "./SplitConfigEditor";
 import { SnippetsEditor } from "./SnippetsEditor";
 import { MemoriesTab } from "./MemoriesTab";
 import { ExtensionsTab } from "./ExtensionsTab";
+import { SecurityTab } from "./SecurityTab";
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -761,6 +762,17 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
             }`}
           >
             Snippets
+          </button>
+          <button
+            onClick={() => setActiveTab("security")}
+            data-active={activeTab === "security" ? "true" : undefined}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "security"
+                ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
+                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            }`}
+          >
+            Security
           </button>
           <button
             onClick={() => setActiveTab("signatures")}
@@ -1622,6 +1634,10 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
           <div className="max-w-3xl">
             <SnippetsEditor />
           </div>
+        )}
+
+        {activeTab === "security" && (
+          <SecurityTab config={generalConfig} />
         )}
 
         {activeTab === "signatures" && (

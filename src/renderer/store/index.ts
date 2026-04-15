@@ -39,7 +39,8 @@ export type SettingsTab =
   | "agents"
   | "analytics"
   | "extensions"
-  | "snippets";
+  | "snippets"
+  | "security";
 
 // Draft content for undo-send restoration or local draft editing
 export type RestoredDraft = {
