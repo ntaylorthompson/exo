@@ -12,6 +12,7 @@ import type {
   Memory,
   MemoryScope,
   MemorySource,
+  MemoryCreatedBy,
   MemoryType,
   DraftMemory,
   SendAsAlias,
@@ -420,6 +421,30 @@ const NUMBERED_MIGRATIONS: Migration[] = [
         if (cols.length > 0 && !cols.some((c) => c.name === "from_address")) {
           db.exec(`ALTER TABLE ${table} ADD COLUMN from_address TEXT`);
         }
+      }
+    },
+  },
+  {
+    version: 3,
+    name: "add_audit_hash_and_memory_approval",
+    up: (db) => {
+      // Hash chain column for tamper detection on audit log
+      const auditCols = db.prepare("PRAGMA table_info(agent_audit_log)").all() as Array<{
+        name: string;
+      }>;
+      if (!auditCols.some((c) => c.name === "hash")) {
+        db.exec("ALTER TABLE agent_audit_log ADD COLUMN hash TEXT");
+      }
+
+      // Memory approval columns: who created it, and whether it's approved
+      const memoryCols = db.prepare("PRAGMA table_info(memories)").all() as Array<{
+        name: string;
+      }>;
+      if (!memoryCols.some((c) => c.name === "created_by")) {
+        db.exec("ALTER TABLE memories ADD COLUMN created_by TEXT NOT NULL DEFAULT 'user'");
+      }
+      if (!memoryCols.some((c) => c.name === "approved")) {
+        db.exec("ALTER TABLE memories ADD COLUMN approved INTEGER NOT NULL DEFAULT 1");
       }
     },
   },
@@ -2277,6 +2302,8 @@ type MemoryRow = {
   source_email_id: string | null;
   enabled: number;
   memory_type: string;
+  created_by: string;
+  approved: number;
   created_at: number;
   updated_at: number;
 };
@@ -2292,6 +2319,8 @@ function memoryRowToMemory(row: MemoryRow): Memory {
     sourceEmailId: row.source_email_id,
     enabled: row.enabled === 1,
     memoryType: (row.memory_type ?? "drafting") as MemoryType,
+    createdBy: (row.created_by ?? "user") as MemoryCreatedBy,
+    approved: row.approved !== 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -2300,8 +2329,8 @@ function memoryRowToMemory(row: MemoryRow): Memory {
 export function saveMemory(memory: Memory): void {
   const db = getDatabase();
   const stmt = db.prepare(`
-    INSERT OR REPLACE INTO memories (id, account_id, scope, scope_value, content, source, source_email_id, enabled, memory_type, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR REPLACE INTO memories (id, account_id, scope, scope_value, content, source, source_email_id, enabled, memory_type, created_by, approved, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   stmt.run(
     memory.id,
@@ -2313,6 +2342,8 @@ export function saveMemory(memory: Memory): void {
     memory.sourceEmailId ?? null,
     memory.enabled ? 1 : 0,
     memory.memoryType ?? "drafting",
+    memory.createdBy ?? "user",
+    memory.approved !== false ? 1 : 0,
     memory.createdAt,
     memory.updatedAt,
   );
@@ -2429,6 +2460,29 @@ export function updateMemory(
 }
 
 export function deleteMemory(id: string): void {
+  const db = getDatabase();
+  db.prepare("DELETE FROM memories WHERE id = ?").run(id);
+}
+
+/** Fetch memories pending user approval (agent-created, not yet approved). */
+export function getPendingMemories(accountId: string): Memory[] {
+  const db = getDatabase();
+  const rows = db
+    .prepare(
+      "SELECT * FROM memories WHERE account_id = ? AND approved = 0 ORDER BY created_at DESC",
+    )
+    .all(accountId) as MemoryRow[];
+  return rows.map(memoryRowToMemory);
+}
+
+/** Approve a pending memory so it takes effect in prompts. */
+export function approveMemory(id: string): void {
+  const db = getDatabase();
+  db.prepare("UPDATE memories SET approved = 1, updated_at = ? WHERE id = ?").run(Date.now(), id);
+}
+
+/** Reject (delete) a pending memory. */
+export function rejectMemory(id: string): void {
   const db = getDatabase();
   db.prepare("DELETE FROM memories WHERE id = ?").run(id);
 }
@@ -4184,14 +4238,15 @@ export type AuditEntryRow = {
   userApproved?: boolean;
   accountId?: string;
   expiresAt?: string;
+  hash?: string;
 };
 
 export function saveAuditEntry(entry: AuditEntryRow): void {
   const db = getDatabase();
   const stmt = db.prepare(`
     INSERT INTO agent_audit_log
-      (task_id, provider_id, timestamp, event_type, tool_name, input_json, output_json, redaction_applied, user_approved, account_id, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (task_id, provider_id, timestamp, event_type, tool_name, input_json, output_json, redaction_applied, user_approved, account_id, expires_at, hash)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   stmt.run(
     entry.taskId,
@@ -4205,6 +4260,7 @@ export function saveAuditEntry(entry: AuditEntryRow): void {
     entry.userApproved !== undefined ? (entry.userApproved ? 1 : 0) : null,
     entry.accountId || null,
     entry.expiresAt || null,
+    entry.hash || null,
   );
 }
 
@@ -4214,7 +4270,7 @@ export function getAuditEntries(taskId: string): AuditEntryRow[] {
     SELECT id, task_id AS taskId, provider_id AS providerId, timestamp, event_type AS eventType,
            tool_name AS toolName, input_json AS inputJson, output_json AS outputJson,
            redaction_applied AS redactionApplied, user_approved AS userApproved,
-           account_id AS accountId, expires_at AS expiresAt
+           account_id AS accountId, expires_at AS expiresAt, hash
     FROM agent_audit_log
     WHERE task_id = ?
     ORDER BY id ASC
@@ -4233,6 +4289,7 @@ export function getAuditEntries(taskId: string): AuditEntryRow[] {
     userApproved: row.userApproved !== null ? Boolean(row.userApproved) : undefined,
     accountId: row.accountId as string | undefined,
     expiresAt: row.expiresAt as string | undefined,
+    hash: row.hash as string | undefined,
   }));
 }
 

@@ -157,6 +157,7 @@ export interface AgentFrameworkConfig {
   model: string;
   anthropicApiKey?: string;
   aiSendingDisabled?: boolean;
+  toolRateLimits?: Record<string, number>;
   providers?: Record<string, ProviderSettings>;
   browserConfig?: {
     enabled: boolean;

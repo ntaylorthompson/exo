@@ -77,14 +77,22 @@ const saveMemory: ToolDefinition<{
       scope: input.scope,
       scopeValue: input.scopeValue?.toLowerCase() ?? null,
       content: input.content,
-      source: "manual",
+      source: "agent",
       sourceEmailId: null,
       enabled: true,
+      createdBy: "agent",
+      approved: false,
       createdAt: now,
       updatedAt: now,
     };
     await ctx.db("saveMemory", memory);
-    return { saved: true, id: memory.id, scope: input.scope, scopeValue: input.scopeValue ?? null };
+    return {
+      saved: true,
+      pendingApproval: true,
+      id: memory.id,
+      scope: input.scope,
+      scopeValue: input.scopeValue ?? null,
+    };
   },
 };
 

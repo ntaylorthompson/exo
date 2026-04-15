@@ -19,6 +19,9 @@ declare global {
           updates: { content?: string; enabled?: boolean },
         ) => Promise<IpcResponse<Memory | null>>;
         delete: (id: string) => Promise<IpcResponse<void>>;
+        pending: (accountId: string) => Promise<IpcResponse<Memory[]>>;
+        approve: (id: string) => Promise<IpcResponse<void>>;
+        reject: (id: string) => Promise<IpcResponse<void>>;
         categories: (accountId: string) => Promise<IpcResponse<string[]>>;
         draftMemories: {
           list: (accountId: string) => Promise<IpcResponse<DraftMemory[]>>;
@@ -84,6 +87,9 @@ export function MemoriesTab({
   // Draft memories state
   const [draftMemories, setDraftMemories] = useState<DraftMemory[]>([]);
   const [showDraftMemories, setShowDraftMemories] = useState(false);
+
+  // Pending approval state (agent-created memories)
+  const [pendingMemories, setPendingMemories] = useState<Memory[]>([]);
 
   // Highlight set for scroll-to behavior
   const promotedHighlightRef = useRef<HTMLDivElement>(null);
@@ -155,6 +161,17 @@ export function MemoriesTab({
     }
   }, [accountId]);
 
+  const loadPendingMemories = useCallback(async () => {
+    try {
+      const raw = await window.api.memory.pending(accountId);
+      if (raw.success && Array.isArray(raw.data)) {
+        setPendingMemories(raw.data);
+      }
+    } catch {
+      // Non-critical
+    }
+  }, [accountId]);
+
   const loadDraftMemories = useCallback(async () => {
     try {
       const raw = await window.api.memory.draftMemories.list(accountId);
@@ -181,7 +198,8 @@ export function MemoriesTab({
     loadMemories();
     loadCategories();
     loadDraftMemories();
-  }, [loadMemories, loadCategories, loadDraftMemories]);
+    loadPendingMemories();
+  }, [loadMemories, loadCategories, loadDraftMemories, loadPendingMemories]);
 
   const handleAdd = async () => {
     if (!newContent.trim()) return;
@@ -301,6 +319,55 @@ export function MemoriesTab({
         </div>
 
         {error && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>}
+
+        {/* Pending approval banner */}
+        {pendingMemories.length > 0 && (
+          <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+            <h4 className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-2">
+              Pending Approval ({pendingMemories.length})
+            </h4>
+            <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">
+              The AI agent wants to save these memories. They won&apos;t take effect until approved.
+            </p>
+            <div className="space-y-2">
+              {pendingMemories.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-start justify-between gap-2 p-2 bg-white dark:bg-gray-800 rounded border border-amber-100 dark:border-amber-900"
+                >
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs text-gray-400 dark:text-gray-500 mr-1">
+                      [{SCOPE_LABELS[m.scope]}
+                      {m.scopeValue ? `: ${m.scopeValue}` : ""}]
+                    </span>
+                    <span className="text-sm text-gray-900 dark:text-gray-100">{m.content}</span>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <button
+                      onClick={async () => {
+                        await window.api.memory.approve(m.id);
+                        loadPendingMemories();
+                        loadMemories();
+                      }}
+                      className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await window.api.memory.reject(m.id);
+                        loadPendingMemories();
+                      }}
+                      className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Add memory form */}
         {showAddForm && (

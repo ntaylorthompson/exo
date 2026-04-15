@@ -3,8 +3,12 @@
  *
  * Works via the DB proxy in the utility process — all writes go through
  * the dbProxy function rather than importing better-sqlite3 directly.
+ *
+ * Each entry includes a SHA-256 hash chain: hash = SHA-256(prevHash + entryJson).
+ * This provides tamper detection for forensic review.
  */
 
+import { createHash } from "node:crypto";
 import type { DbProxyFn } from "./types";
 
 export interface AuditEntry {
@@ -19,6 +23,7 @@ export interface AuditEntry {
   userApproved?: boolean;
   accountId?: string;
   expiresAt?: string;
+  hash?: string;
 }
 
 const MAX_BODY_LENGTH = 200;
@@ -57,11 +62,19 @@ export function redactPayload(payload: unknown): unknown {
   return payload;
 }
 
+/** Compute SHA-256(prevHash + serializedEntry) for hash chain continuity. */
+export function computeEntryHash(prevHash: string, entry: Omit<AuditEntry, "hash">): string {
+  const entryJson = JSON.stringify(entry);
+  return createHash("sha256").update(prevHash + entryJson).digest("hex");
+}
+
 export class AuditLog {
+  private lastHash = "0".repeat(64); // genesis hash
+
   constructor(private readonly dbProxy: DbProxyFn) {}
 
   async saveEntry(entry: AuditEntry): Promise<void> {
-    const redacted = {
+    const redacted: AuditEntry = {
       ...entry,
       inputJson: entry.inputJson
         ? JSON.stringify(redactPayload(JSON.parse(entry.inputJson)))
@@ -71,6 +84,11 @@ export class AuditLog {
         : undefined,
       redactionApplied: true,
     };
+
+    // Compute and attach hash chain link
+    const hash = computeEntryHash(this.lastHash, redacted);
+    redacted.hash = hash;
+    this.lastHash = hash;
 
     await this.dbProxy("saveAuditEntry", redacted);
   }

@@ -241,6 +241,7 @@ export class AgentCoordinator {
       model: getModelIdForFeature("agentDrafter"),
       anthropicApiKey: apiKey,
       aiSendingDisabled: appConfig.aiSendingDisabled ?? true,
+      toolRateLimits: appConfig.toolRateLimits,
       browserConfig: browser
         ? {
             enabled: browser.enabled,

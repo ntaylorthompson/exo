@@ -51,7 +51,9 @@ export function buildScopedSections(
 }
 
 export function buildMemoryContext(senderEmail: string, accountId: string): string {
-  const memories = getRelevantMemories(senderEmail, accountId, "drafting");
+  const memories = getRelevantMemories(senderEmail, accountId, "drafting").filter(
+    (m) => m.approved !== false,
+  );
   if (memories.length === 0) return "";
   const sections = buildScopedSections(memories, DRAFTING_CAP, senderEmail);
   return `=== YOUR PREFERENCES (MEMORIES) ===\n${sections.join("\n\n")}\n`;
@@ -66,12 +68,16 @@ export function buildMemoryContext(senderEmail: string, accountId: string): stri
  * all user preferences across analysis, lookups, drafts, and general behavior.
  */
 export function buildAgentMemoryContext(accountId: string, senderEmail?: string): string {
-  const draftingMemories = senderEmail
-    ? getRelevantMemories(senderEmail, accountId, "drafting")
-    : getAccountMemories(accountId, "drafting");
-  const analysisMemories = senderEmail
-    ? getRelevantMemories(senderEmail, accountId, "analysis")
-    : getAccountMemories(accountId, "analysis");
+  const draftingMemories = (
+    senderEmail
+      ? getRelevantMemories(senderEmail, accountId, "drafting")
+      : getAccountMemories(accountId, "drafting")
+  ).filter((m) => m.approved !== false);
+  const analysisMemories = (
+    senderEmail
+      ? getRelevantMemories(senderEmail, accountId, "analysis")
+      : getAccountMemories(accountId, "analysis")
+  ).filter((m) => m.approved !== false);
 
   const allMemories = [...draftingMemories, ...analysisMemories];
   if (allMemories.length === 0) return "";
@@ -86,7 +92,9 @@ export function buildAgentMemoryContext(accountId: string, senderEmail?: string)
  * Appended to the user message to preserve system prompt caching.
  */
 export function buildAnalysisMemoryContext(senderEmail: string, accountId: string): string {
-  const memories = getRelevantMemories(senderEmail, accountId, "analysis");
+  const memories = getRelevantMemories(senderEmail, accountId, "analysis").filter(
+    (m) => m.approved !== false,
+  );
   if (memories.length === 0) return "";
   const sections = buildScopedSections(memories, ANALYSIS_CAP, senderEmail);
   return `\n=== USER'S PRIORITY PREFERENCES ===\nThe user has saved these preferences about how to classify emails. Apply them when relevant:\n${sections.join("\n\n")}\n`;

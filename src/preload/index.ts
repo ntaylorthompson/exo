@@ -264,6 +264,10 @@ const api = {
       updates: { content?: string; enabled?: boolean; scope?: string; scopeValue?: string | null },
     ): Promise<unknown> => ipcRenderer.invoke("memory:update", { id, updates }),
     delete: (id: string): Promise<unknown> => ipcRenderer.invoke("memory:delete", { id }),
+    pending: (accountId: string): Promise<unknown> =>
+      ipcRenderer.invoke("memory:pending", { accountId }),
+    approve: (id: string): Promise<unknown> => ipcRenderer.invoke("memory:approve", { id }),
+    reject: (id: string): Promise<unknown> => ipcRenderer.invoke("memory:reject", { id }),
     categories: (accountId: string): Promise<unknown> =>
       ipcRenderer.invoke("memory:categories", { accountId }),
     classify: (params: {

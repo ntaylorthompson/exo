@@ -415,6 +415,10 @@ export const ConfigSchema = z.object({
       gatewayToken: z.string().default(""),
     })
     .optional(),
+  toolRateLimits: z
+    .record(z.string(), z.number().int().positive())
+    .optional()
+    .describe("Per-task tool call limits, e.g. { modify_labels: 20, save_memory: 10 }"),
   configVersion: z.number().optional(),
 });
 
@@ -613,8 +617,12 @@ export const MemorySourceSchema = z.enum([
   "refinement",
   "draft-edit",
   "priority-override",
+  "agent",
 ]);
 export type MemorySource = z.infer<typeof MemorySourceSchema>;
+
+export const MemoryCreatedBySchema = z.enum(["user", "agent", "draft-learner"]);
+export type MemoryCreatedBy = z.infer<typeof MemoryCreatedBySchema>;
 
 export const MemoryTypeSchema = z.enum(["drafting", "analysis"]);
 export type MemoryType = z.infer<typeof MemoryTypeSchema>;
@@ -629,6 +637,8 @@ export const MemorySchema = z.object({
   sourceEmailId: z.string().nullable().optional(),
   enabled: z.boolean(),
   memoryType: MemoryTypeSchema.default("drafting"),
+  createdBy: MemoryCreatedBySchema.default("user"),
+  approved: z.boolean().default(true),
   createdAt: z.number(),
   updatedAt: z.number(),
 });

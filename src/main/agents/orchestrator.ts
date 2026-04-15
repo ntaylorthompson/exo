@@ -20,6 +20,8 @@ import type { ProxyContext } from "./tools/types";
 import { createSubAgentTool } from "./tools/sub-agent-tool";
 import { discoverPrivateProviders } from "./private-providers";
 import { isTrustedSender } from "../services/trusted-senders";
+import { AuditLog } from "./audit-log";
+import { SafetyMonitor } from "./safety-monitor";
 
 /**
  * AgentOrchestrator runs inside the utility process.
@@ -122,10 +124,56 @@ export class AgentOrchestrator {
     proxyCtx: ProxyContext,
   ): ToolExecutorFn {
     const permissionGate = new PermissionGate();
+    const auditLog = new AuditLog(proxyCtx.db);
+    const safetyMonitor = new SafetyMonitor();
+    const toolCallCounts = new Map<string, number>();
+
+    // Merge user-configured limits over sensible defaults
+    const DEFAULT_RATE_LIMITS: Record<string, number> = {
+      modify_labels: 20,
+      save_memory: 10,
+      create_draft: 5,
+      generate_draft: 5,
+      search_gmail: 10,
+    };
+    const rateLimits: Record<string, number> = {
+      ...DEFAULT_RATE_LIMITS,
+      ...this.config.toolRateLimits,
+    };
 
     return async (toolName: string, args: Record<string, unknown>): Promise<unknown> => {
       const tool = registry.get(toolName);
       if (!tool) throw new Error(`Unknown tool: ${toolName}`);
+
+      // Enforce per-task rate limits
+      const limit = rateLimits[toolName];
+      if (limit !== undefined) {
+        const count = toolCallCounts.get(toolName) ?? 0;
+        if (count >= limit) {
+          throw new Error(
+            `Rate limit exceeded: "${toolName}" has been called ${count} times in this task (limit: ${limit})`,
+          );
+        }
+        toolCallCounts.set(toolName, count + 1);
+      }
+
+      // Anomaly detection — check for suspicious patterns before executing
+      const anomaly = safetyMonitor.recordToolCall(toolName, args);
+      if (anomaly) {
+        const anomalyCallId = randomUUID();
+        const userApproved = await this.awaitConfirmation(
+          taskId,
+          anomalyCallId,
+          toolName,
+          args,
+          `Safety warning: ${anomaly.message}`,
+        );
+        if (!userApproved) {
+          throw new Error(
+            `Task paused by safety monitor: ${anomaly.type} (${anomaly.count}/${anomaly.threshold})`,
+          );
+        }
+      }
 
       const decision = permissionGate.checkPermission(tool, args);
 
@@ -142,6 +190,18 @@ export class AgentOrchestrator {
           throw new Error(`Tool "${toolName}" was rejected by user`);
         }
       }
+
+      // Log intent before execution
+      const timestamp = new Date().toISOString();
+      auditLog.saveEntry({
+        taskId,
+        providerId: "orchestrator",
+        timestamp,
+        eventType: "tool_call",
+        toolName,
+        inputJson: JSON.stringify(args),
+        redactionApplied: false,
+      });
 
       // Tag proxy requests with taskId so cancellation is scoped
       this.deps.setActiveTaskId(taskId);
@@ -176,7 +236,32 @@ export class AgentOrchestrator {
           }
         }
 
+        // Log result after execution
+        auditLog.saveEntry({
+          taskId,
+          providerId: "orchestrator",
+          timestamp: new Date().toISOString(),
+          eventType: "tool_result",
+          toolName,
+          outputJson: JSON.stringify(result),
+          redactionApplied: false,
+        });
+
         return result;
+      } catch (err) {
+        // Log error
+        auditLog.saveEntry({
+          taskId,
+          providerId: "orchestrator",
+          timestamp: new Date().toISOString(),
+          eventType: "tool_error",
+          toolName,
+          outputJson: JSON.stringify({
+            error: err instanceof Error ? err.message : String(err),
+          }),
+          redactionApplied: false,
+        });
+        throw err;
       } finally {
         this.deps.setActiveTaskId(null);
       }

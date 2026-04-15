@@ -12,6 +12,9 @@ import {
   getDraftMemories,
   getDraftMemory,
   deleteDraftMemory,
+  getPendingMemories,
+  approveMemory,
+  rejectMemory,
 } from "../db";
 import type {
   IpcResponse,
@@ -98,6 +101,8 @@ export function registerMemoryIpc(): void {
           sourceEmailId: sourceEmailId ?? null,
           enabled: true,
           memoryType: "drafting",
+          createdBy: "user",
+          approved: true,
           createdAt: now,
           updatedAt: now,
         };
@@ -288,6 +293,46 @@ Respond in JSON only: {"scope":"...","scopeValue":"...","content":"..."}`,
   );
 
   // ============================================
+  // Memory approval workflow (agent-created memories)
+  // ============================================
+
+  ipcMain.handle(
+    "memory:pending",
+    async (_, { accountId }: { accountId: string }): Promise<IpcResponse<Memory[]>> => {
+      try {
+        const pending = getPendingMemories(accountId);
+        return { success: true, data: pending };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "memory:approve",
+    async (_, { id }: { id: string }): Promise<IpcResponse<void>> => {
+      try {
+        approveMemory(id);
+        return { success: true, data: undefined };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "memory:reject",
+    async (_, { id }: { id: string }): Promise<IpcResponse<void>> => {
+      try {
+        rejectMemory(id);
+        return { success: true, data: undefined };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+      }
+    },
+  );
+
+  // ============================================
   // Draft Memory operations
   // ============================================
 
@@ -361,6 +406,8 @@ Respond in JSON only: {"scope":"...","scopeValue":"...","content":"..."}`,
           source,
           memoryType,
           enabled: true,
+          createdBy: "draft-learner",
+          approved: true, // Promoted by user action — already approved
           createdAt: now,
           updatedAt: now,
         };
